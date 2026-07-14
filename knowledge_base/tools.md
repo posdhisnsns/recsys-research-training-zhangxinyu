@@ -41,9 +41,10 @@
 ## 8、勾选框
 
 格式：`- [ ] `
-- [x] 已完成
-# Git 用法
 
+- [x] 已完成
+  
+  # Git 用法
 1. 设置全局用户名：`git config --global user.name "你的名字"`
 
 2. 设置全局邮箱：`git config --global user.email "你的邮箱@example.com"`
@@ -109,3 +110,47 @@
         git reset --soft HEAD~1    # 撤销提交，改动保留在暂存区
         git reset --mixed HEAD~1   # 撤销提交，改动保留在工作区（默认）
         git reset --hard HEAD~1    # 彻底删除改动
+
+# Conda 用法
+
+## 环境管理
+
+1. 创建新环境：`conda create --name myenv`
+
+2. 创建指定 Python 版本的环境：`conda create --name myenv python=3.8`
+
+3. 激活环境：`conda activate myenv`
+
+4. 退出当前环境：`conda deactivate`
+
+5. 查看所有环境：`conda env list`
+
+6. 删除环境：`conda env remove --name myenv`
+
+## 包管理
+
+1. 安装包：`conda install package_name`
+
+2. 安装指定版本的包：`conda install package_name=1.2.3`
+
+3. 更新包：`conda update package_name`
+
+4. 卸载包：`conda remove package_name`
+
+5. 查看已安装的包：`conda list`
+
+## 其他常用命令
+
+1. 查看帮助信息：`conda --help`
+
+2. 查看 Conda 版本：`conda --version`
+
+3. 搜索包：`conda search package_name`
+
+4. 清理缓存和不需要的包：`conda clean --all`
+
+## Jupyter Notebook 的使用（可选）
+
+1. 安装 Jupyter Notebook：`conda install jupyter`
+
+2. 启动 Jupyter Notebook：`jupyter notebook`
