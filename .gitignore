@@ -1,2 +1,4 @@
 .obsidian
+.idea
+__pycache__
 paper

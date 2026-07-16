@@ -1,0 +1,27 @@
+2026-07-16 16:33:59 | INFO | Environment: {"python": "3.10.20", "pytorch": "2.12.1+cu126", "pytorch_cuda_runtime": "12.6", "cuda_available": true, "selected_device": "cuda:0", "gpu_name": "NVIDIA GeForce RTX 3090", "gpu_total_memory_mib": 24154, "visible_cuda_devices": 1}
+2026-07-16 16:33:59 | INFO | Data: users=128, items=120, interactions=3072
+2026-07-16 16:33:59 | INFO | Model parameters: 59648
+2026-07-16 16:34:00 | INFO | GPU memory [model initialized]: process=256 MiB, torch_allocated=0.2 MiB, torch_reserved=2.0 MiB
+2026-07-16 16:34:00 | INFO | GPU memory [epoch 1]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:00 | INFO | Epoch 01 | loss=1.3830 | valid HR@10=0.2578 | valid NDCG@10=0.1180
+2026-07-16 16:34:01 | INFO | GPU memory [epoch 2]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:01 | INFO | Epoch 02 | loss=1.3470 | valid HR@10=0.4141 | valid NDCG@10=0.2423
+2026-07-16 16:34:01 | INFO | GPU memory [epoch 3]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:01 | INFO | Epoch 03 | loss=1.3115 | valid HR@10=0.5547 | valid NDCG@10=0.3524
+2026-07-16 16:34:01 | INFO | GPU memory [epoch 4]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:01 | INFO | Epoch 04 | loss=1.2670 | valid HR@10=0.6328 | valid NDCG@10=0.4510
+2026-07-16 16:34:01 | INFO | GPU memory [epoch 5]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:01 | INFO | Epoch 05 | loss=1.2198 | valid HR@10=0.7031 | valid NDCG@10=0.4965
+2026-07-16 16:34:01 | INFO | GPU memory [epoch 6]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:01 | INFO | Epoch 06 | loss=1.1691 | valid HR@10=0.7422 | valid NDCG@10=0.5273
+2026-07-16 16:34:02 | INFO | GPU memory [epoch 7]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:02 | INFO | Epoch 07 | loss=1.1251 | valid HR@10=0.7578 | valid NDCG@10=0.5669
+2026-07-16 16:34:02 | INFO | GPU memory [epoch 8]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:02 | INFO | Epoch 08 | loss=1.0786 | valid HR@10=0.7656 | valid NDCG@10=0.5916
+2026-07-16 16:34:02 | INFO | GPU memory [epoch 9]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:02 | INFO | Epoch 09 | loss=1.0367 | valid HR@10=0.7891 | valid NDCG@10=0.6147
+2026-07-16 16:34:02 | INFO | GPU memory [epoch 10]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:02 | INFO | Epoch 10 | loss=0.9981 | valid HR@10=0.8047 | valid NDCG@10=0.6363
+2026-07-16 16:34:02 | INFO | GPU memory [final evaluation]: process=342 MiB, torch_allocated=22.1 MiB, torch_reserved=28.0 MiB
+2026-07-16 16:34:02 | INFO | Best epoch 10 | test HR@10=0.8672 | test NDCG@10=0.6620
+2026-07-16 16:34:02 | INFO | Outputs: /home/zhangxinyu/research-training/lesson03/sasrec_smoke_demo/outputs/run_20260716_163359
