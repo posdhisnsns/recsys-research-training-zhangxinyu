@@ -43,8 +43,9 @@
 格式：`- [ ] `
 
 - [x] 已完成
-  
-  # Git 用法
+
+# Git 用法
+
 1. 设置全局用户名：`git config --global user.name "你的名字"`
 
 2. 设置全局邮箱：`git config --global user.email "你的邮箱@example.com"`
