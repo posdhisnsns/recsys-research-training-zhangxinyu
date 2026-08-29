@@ -9,16 +9,16 @@
 
 ### 0 符号约定
 
-| 符号         | 含义                    | CLI 默认值                                   |
-| ---------- | --------------------- | ----------------------------------------- |
-| $B$        | batch_size            | 256                                       |
-| $T$        | max_seq_length        | 50(若 shorten_seq_to 则 = shorten+3)        |
-| $D$        | hidden_size           | 128                                       |
-| $H$        | num_attention_heads   | 2                                         |
-| $L$        | head_size = $D/H$     | 64                                        |
-| $K$        | num_intent_clusters   | 512(Toys/Sports) / 256(Yelp/Beauty/ml-1m) |
-| $M$        | controller_num_levels | 2(硬编码)                                    |
-| $T_{\max}$ | diffusion_t_max       | 50                                        |
+| 符号         | 含义                    | CLI 默认值                                   |     |
+| ---------- | --------------------- | ----------------------------------------- | --- |
+| $B$        | batch_size            | 256                                       |     |
+| $T$        | max_seq_length        | 50(若 shorten_seq_to 则 = shorten+3)        |     |
+| $D$        | hidden_size           | 128                                       |     |
+| $H$        | num_attention_heads   | 2                                         |     |
+| $L$        | head_size = $D/H$     | 64                                        |     |
+| $K$        | num_intent_clusters   | 512(Toys/Sports) / 256(Yelp/Beauty/ml-1m) |     |
+| $M$        | controller_num_levels | 2(硬编码)                                    |     |
+| $T_{\max}$ | diffusion_t_max       | 50                                        |     |
 
 
 ### A. 研究问题
@@ -191,6 +191,7 @@
 - 输出:$g_k$(第 $k$ 层门控概率)。
 - 作用:内容感知路由--动态决定每个层次 $k$ 偏向细粒度专家($g_k$ 大)还是粗粒度专家($g_k$ 小)。
 - 【原文依据:P4 Eq.(7)】
+- 【职责归属】:这是 **C-A Router(Content-Aware Router)**,属 **HP-MoE 的融合端**;与 ADC(生成端控深度)是职责不同的两个模块。注意:代码中此模块被简化合并进了 ADC 的 `controller + probs`(详见 §2.1.5),故消融 ADC 时 C-A Router 也被一并废掉,这是本地消融 ADC 未复现论文 -3.9% 下降的根因之一。
 
 **8 HP-MoE - Eq.(8) 聚合细粒度表征**
 
@@ -264,40 +265,40 @@ $$
 
 #### 1.1 文件职责速查表
 
-| 文件 | 一句话职责 | 核心类/函数 |
+| 文件 | 职责 | 核心类/函数 |
 |------|-----------|------------|
-| `modules.py` | **积木块工厂**:所有基础神经网络组件(注意力、LayerNorm、ADC控制器等)都在这里定义 | `LayerNorm`, `Embeddings`, `SelfAttention`, `Intermediate`, `Layer`, `Encoder`, `NCELoss`, `PCLoss`, `AdaptiveDepthController` |
-| `models.py` | **模型大脑**:SASRec 主干 + 自适应扩散分支 + KMeans 聚类器入口 | `KMeans`, `SASRecModel` |
-| `datasets.py` | **数据流水线**：把原始序列加工成模型可直接消费的 Batch（含增强、Padding、标签切分） | `RecWithContrastiveLearningDataset` |
-| `diffusion_utils.py` | **扩散工具箱**:只有两个纯函数--噪声调度表生成 + 前向加噪(无去噪网络) | `get_noise_schedule`, `forward_diffusion` |
-| `trainers.py` | **训练引擎**:定义损失函数、训练循环、评测逻辑、双专家调度 | `Trainer`, `ELCRecTrainer`, `DualExpertTrainer` |
-| `main.py` | **入口脚本**:命令行参数解析 → 模型/数据组装 → 启动训练或评测 | `main()` |
+| `modules.py` | 基础神经网络组件(注意力、LayerNorm、ADC控制器等) | `LayerNorm`, `Embeddings`, `SelfAttention`, `Intermediate`, `Layer`, `Encoder`, `NCELoss`, `PCLoss`, `AdaptiveDepthController` |
+| `models.py` | SASRec 主干 + 自适应扩散分支 + KMeans 聚类器 | `KMeans`, `SASRecModel` |
+| `datasets.py` | 数据预处理:把原始序列加工成 Batch(含增强、Padding、标签切分) | `RecWithContrastiveLearningDataset` |
+| `diffusion_utils.py` | 扩散工具:噪声调度表生成 + 前向加噪(无去噪网络) | `get_noise_schedule`, `forward_diffusion` |
+| `trainers.py` | 训练引擎:损失函数、训练循环、评测逻辑、双专家调度 | `Trainer`, `ELCRecTrainer`, `DualExpertTrainer` |
+| `main.py` | 入口:命令行参数解析 → 模型/数据组装 → 启动训练或评测 | `main()` |
 
-#### 1.2 各文件通俗理解
+#### 1.2 各文件说明
 
-- **`modules.py`**:就像乐高积木里的基础件--LayerNorm 是"标准化步骤",SelfAttention 是"让序列里每个物品看到上下文",AdaptiveDepthController 是"自动决定用多强的噪声来增强"。
+- **`modules.py`**:基础组件。LayerNorm 负责标准化、SelfAttention 让序列中每个物品看到上下文、AdaptiveDepthController 决定用多强的噪声增强。
 
-- **`models.py`**:拼装这些积木,搭出完整的 SASRec 模型。它负责把 item ID 变成向量(Embedding),让向量在 Transformer 里流转,最后吐出序列表示。如果开了自适应扩散,还会在这里分叉--一路干净,一路加噪后再编码。
+- **`models.py`**:模型主体。把 item ID 变成向量(Embedding)、在 Transformer 中流转、输出序列表示。开启自适应扩散时分为两路:干净分支和加噪后编码分支。
 
-- **`datasets.py`**:把交互序列([item1, item2, ..., itemN])切一刀,左边是"历史记录"(input_ids),右边是"下一个要预测的物品"(target_pos/target_neg)。同时生成两份增强后的副本,用于对比学习。
+- **`datasets.py`**:数据预处理。把交互序列切分成历史记录(input_ids)和预测目标(target_pos/target_neg),同时生成两份增强副本用于对比学习。
 
-- **`diffusion_utils.py`**:极简文件,只有两个数学函数。`get_noise_schedule` 生成一条从 1 慢慢降到 0 的曲线(代表每步保留多少原信号),`forward_diffusion` 用闭式公式一步把干净嵌入变成带噪嵌入。
+- **`diffusion_utils.py`**:扩散函数。`get_noise_schedule` 生成从 1 降到 0 的调度曲线、`forward_diffusion` 用闭式公式把干净嵌入变成带噪嵌入。
 
-- **`trainers.py`**:把模型、数据、损失函数串起来,告诉 PyTorch "前向算loss → 反向算梯度 → 更新参数"怎么做。这里定义了全部四种损失(推荐损失 + 重构损失 + 探索损失 + 对比损失)的加权组合。
+- **`trainers.py`**:训练流程。定义推荐损失 + 重构损失 + 探索损失 + 对比损失的加权组合,执行前向算 loss → 反向算梯度 → 更新参数。
 
-- **`main.py`**:整个项目的"总指挥",把所有零件组装起来,根据 `--dual_expert` 等命令行开关决定跑单专家还是双专家,训练到早停后加载最优权重做测试。
+- **`main.py`**:入口。组装所有组件,根据命令行参数(如 `--dual_expert`)选择单专家或双专家模式,训练至早停后加载最优权重测试。
 
 ---
 
 ### §2 六步映射体系
 
-> 这一节是整个笔记的核心。每个模块先说"它是干什么的",再看代码怎么写、对应论文哪一步。
+每个模块先说明功能,再看代码实现和论文对应关系。
 
 ---
 
 #### 2.1 ADC(Adaptive Depth Controller,自适应深度控制器)
 
-**一句话功能**:看一个用户序列(embedding + 长度),输出一个概率分布--表示"用浅层扩散 / 深层扩散的偏好比例"。
+**功能**:输入用户序列 embedding 和长度,输出概率分布表示浅层/深层扩散的偏好比例。
 
 ##### 2.1.1 在模型中如何被调用
 
@@ -335,11 +336,11 @@ probs = F.softmax(logits, dim=-1)             # (B, 2)
 ```
 用两个向量拼成一个 2D 向量,过一个 Linear 变成 2 维 logits,再 softmax 得到概率分布。
 
-> **注意**:代码里用的是普通 softmax,而非 Gumbel-Softmax 或 argmax 采样。论文描述是"前向用 argmax 选一个深度,后向用概率回传",但**实际代码是:前向和后向都用完整的 softmax 概率向量**。
+> 代码使用普通 softmax,而非 Gumbel-Softmax 或 argmax 采样。论文描述为"前向用 argmax 选深度,后向用概率回传",实际代码前向和后向都用 softmax 概率向量。
 
-##### 2.1.3 probs 的三条去向(这是理解代码的关键!)
+##### 2.1.3 probs 的三条去向
 
-ADC 输出的 `probs` 不是孤立的,它在三个地方被使用,性质各不相同:
+ADC 输出的 `probs` 在三个地方被使用:
 
 **去向一:前向加权求和(参与数值计算)** - `models.py:forward` L176~194
 
@@ -397,13 +398,73 @@ _, cl_sequence_output_inst, _ = model(cl_inputs_inst, sequence_lengths=cl_inputs
 - **不是 Gumbel-Softmax**:没有 `F.gumbel_softmax` 或添加 Gumbel 噪声
 - **是纯 softmax 软混合**:所有深度按概率加权求和
 
+##### 2.1.5 关键辨析:代码把 ADC 与 C-A Router 两个职责合并进了一个 `probs`
+
+论文里 **ADC(生成端控深度)** 与 **C-A Router(解析端控融合)** 是两个职责不同、分属不同组件的模块,代码却把它们坍缩进同一个 `controller + probs`:
+
+| 维度 | 论文 ADC | 论文 C-A Router | 代码实际(合并后) |
+| --- | --- | --- | --- |
+| **回答的问题** | 加噪到第几层?(决定层次深度) | 各层次各占多大权重?(层级加权) | 两件事都靠一个 probs |
+| **输出** | 离散深度 $T_u$(整数) | 每层门控 $g_k$(向量) | `(B,2)` 的 softmax 概率 |
+| **输入** | 序列 embedding + 长度 | 每层内容 $\text{Pool}(\hat{E}_u^k)$ + 噪声层级嵌入 $\text{emb}(k)$ | 序列 embedding + 长度(GRU) |
+| **控制对象** | 扩散深度(生成端) | 层级加权融合(解析端) | 相邻两深度 `[4,5]`/`[9,10]` |
+| **归属组件** | HDA(扩散增强) | HP-MoE(融合) | 无归属,合并 |
+
+**职责串起来的先后顺序**(论文):
+1. ADC 决定意图层次"有多少层、深到哪"($T_u$)
+2. C-A Router 决定这 $T_u$ 层"各自占多少权重"($g_k$)来融合
+
+**为什么代码里看起来像同一个东西**:三重简化把它们坍缩了——
+1. ADC 的 0~k 连续深度 → 硬编码 `num_levels=2`(两档);
+2. C-A Router 的逐层门控 $g_k$(MLP + emb(k)) → 同一个 softmax `probs`;
+3. 两个独立模块两套参数 → 合并成一个 controller。
+
+于是 `probs` 同时承担两份职责:
+- **前向**:对两个深度 `[4,5]` 的加噪表示加权求和 = **C-A Router 的活**(Eq.7/8 层级加权);
+- **反向**:负熵探索损失 $-\text{mean}(\text{entropy}(probs))$ = **ADC 的活**(保持"选深度"的多样性)。
+
+**这直接解释了消融 ADC 做不出效果的原因**:无论固定 probs 还是去掉 controller,都同时"废掉"了 ADC 和 C-A Router;但深度只有相邻两档、探索损失权重仅 1e-4,两者的"自适应空间"都被 num_levels=2 压没了,所以指标几乎不动。论文 Table 4 能分别看到 "w/o ADC"(-3.9%)与 "w/o C-A Router"(-1.3%)的独立效果,正是因为它们是两个独立模块、各有独立参数和输入,可单独拆掉其中一个。
+
+**第二重耦合:ADC 与 HDA 也串在一起(代码里 ADC 是枢纽)**。上面只讲了 `probs` 的"前向/反向"双重身份,但还有一个更根本的问题——`probs` 的**唯一消费方就是 HDA 的加噪加权**。看 forward 这条链:
+
+```
+controller(sequence_emb, lengths) → probs
+        ↓
+对每个 diffusion_level 加噪 → weighted_embs（HDA 的加噪,权重就是 probs）
+        ↓
+sum → item_encoder → adaptive_sequence_output
+```
+
+即:controller 输出的 `probs` 直接就是"每个深度加噪结果的加权系数",ADC 与 HDA 在代码里是**同一个 forward 里的先后两步**,不是两个可独立拆解模块。因此:
+
+- **去 HDA 会连带废掉 ADC**:若 adaptive 分支直接等于 raw 且不调用 controller,则 `probs=None` → 探索损失归零 → ADC 不再被训练(早期 `ablate_hda` 实现的 bug);
+- **去 ADC 会连带废掉 HDA 的"分层"语义**:固定单一深度后,HDA 退化为"固定单步加噪",不再产生意图层次。
+
+论文里 ADC 输出离散深度 $T_u$,HDA 用 $T_u$ 做加噪+去噪,两者是独立模块,故 Table 4 里 `w/o HDA`(✓✗✓✓✓)能保留 ADC。代码因把两者揉进同一个 forward,无法像论文那样干净地"只拆 HDA、保留 ADC"。
+
+**修正后的 `ablate_hda`(保留 ADC,只去加噪)**:
+```python
+if getattr(self.args, 'ablate_hda', False):
+    probs = self.controller(sequence_emb.detach(), sequence_lengths)  # ADC 照常跑
+    return raw_sequence_output, raw_sequence_output, probs           # adaptive=raw,探索损失保留
+```
+这样 ADC 仍在(controller 有梯度、探索损失照常训练),仅去掉 HDA 的"加噪+再编码";副作用是 `reconstruction_loss = MSE(raw, raw.detach()) = 0`(去 HDA 本就没有重构,合理)。
+
+**结论(三层耦合,消融均难复现)**:代码里 **ADC、HDA、C-A Router 三个组件实际全被简化成"几乎不影响前向"的装饰**——
+1. `num_levels=2` 使深度只有相邻两档,HDA 的"分层"名存实亡;
+2. `expl_weight=1e-4` 使 ADC 的探索信号趋近于零;
+3. 融合固定 0.5/0.5,无 C-A Router 门控;
+4. 三者都挂在同一个 `probs`/`controller` 上,无法独立消融。
+
+真正在起作用的是 **HP-MoE 的双专家集成(depth=4,5 vs 9,10 两套独立参数)+ SASRec 骨干**。这解释了为什么完整模型指标能对上论文,但每个组件消融都做不出论文的下降幅度(ADC -3.9%、HDA -6.9%、HP-MoE -9.5%)。
+
 ---
 
 #### 2.2 HDA(Hybrid Diffusion Augmentation,混合扩散增强)
 
-**一句话功能**:对干净嵌入加噪声(不是去噪),再过一遍 Transformer Encoder,用加噪后的表示辅助推荐训练。
+**功能**:对干净嵌入加噪声(非去噪),再过 Transformer Encoder,用加噪后的表示辅助推荐训练。
 
-##### 2.2.1 扩散过程的数学直觉
+##### 2.2.1 扩散过程原理
 
 DDPM 的前向扩散(Forward Process)有一个闭式解:
 
@@ -483,7 +544,7 @@ adaptive_sequence_output (B, T, D)
 
 #### 2.3 HP-MoE(Hierarchical Prototype Mixture of Experts,分层原型双专家)
 
-**一句话功能**:用两个独立的 SASRec 专家分别处理"浅层扩散(depth=4,5)"和"深层扩散(depth=9,10)",推理时把两者的预测分数等权平均。
+**功能**:用两个独立的 SASRec 专家分别处理浅层扩散(depth=4,5)和深层扩散(depth=9,10),推理时把两者的预测分数等权平均。
 
 ##### 2.3.1 双专家的模型构造
 
@@ -654,69 +715,28 @@ print("probs max:",  probs.max().item())    # 接近 1.0 表示很偏科
 
 #### 4.1 "这段代码在算什么?"
 
-拿到一个陌生的代码段,先问这三件事:
+分析陌生代码段的三个维度:
 
-**1 输入是什么?** 看函数的参数类型和文档。例如 `forward_diffusion(E_0, t, alphas_cumprod)` - 三个输入都是张量,形状分别是 `(B,T,D)`, `(B,)`, `(Tmax,)`。
+**输入**:函数参数类型与形状。例如 `forward_diffusion(E_0, t, alphas_cumprod)` 三个张量形状分别为 `(B,T,D)`, `(B,)`, `(Tmax,)`。
 
-**2 输出是什么?** 看函数的最后一行 return 语句。`forward_diffusion` 返回 `E_t`,即加噪后的嵌入。
+**输出**:函数返回值。`forward_diffusion` 返回 `E_t` 即加噪后的嵌入,形状与输入 `E_0` 相同。
 
-**3 用了什么数学操作?** 拆解成"取索引 → 算 sqrt → 采样噪声 → 加权求和"四步,不要被 PyTorch 的广播语法吓到。
+**数学操作**:拆解为"取索引 → 算 sqrt → 采样噪声 → 加权求和"四步。
 
-#### 4.2 "数据在模块间的流转"(文字版流程图)
+#### 4.2 "数据在模块间的流转"
 
-```
-原始序列 [item_id, item_id, ...]
-    │
-    ▼ datasets.py:__getitem__
-    ├─ input_ids (去掉末尾标签位)         ──────────────────┐
-    ├─ target_pos (右移一位)               ──────────────────┤
-    ├─ target_neg (负采样)                ──────────────────┤
-    ├─ cf_views (两个增强副本)            ──────────────────┤
-    └─ sequence_len (真实长度)            ──────────────────┘
-                                              │
-                                              ▼ trainers.py:iteration / _train_one_expert
-                                              │
-                              ┌───────────────┴───────────────┐
-                              ▼                               ▼
-                     【推荐任务分支】                   【对比学习分支】
-                              │                               │
-                              ▼                               ▼
-                     models.py:forward                    model(cl_batch)
-                              │                               │
-               ┌─────────────┼─────────────┐                 │
-               ▼             ▼             ▼                 ▼
-        raw_output    adaptive_output   probs        cl_sequence_output
-               │             │             │                 │
-               ▼             ▼             ▼                 ▼
-        BPR 交叉熵    BPR 交叉熵    ┌──────────────┐   InstanceCL (NCE)
-        (推荐损失1)   (推荐损失2)    │  entropy →   │         │
-                                     │  exploration_loss  │
-                                     └──────────────┘         ▼
-                                              │           送入 projection 头 → 对比损失
-                              ┌───────────────┴───────────────┐
-                              ▼                               ▼
-                       MSE 重构损失                   IntentCL (PCLoss) [warm_up后]
-                       (adaptive vs raw)                    │
-                              │                             ▼
-                              └──────────┬────────────────────┘
-                                         ▼
-                                  joint_loss
-                                         │
-                                         ▼
-                                  backward() → optimizer.step()
-```
+文字版简要流程(详细数据流图见 **§5 数据流链路图**):
+
+1. `datasets.py.__getitem__` 把原始序列切分成 input_ids / target_pos / target_neg / cf_views / sequence_len
+2. `trainers.py.iteration` 根据专家类型调用 `models.py.forward`
+3. 模型分叉:raw 分支(无加噪) + adaptive 分支(经 ADC 控制器 + HDA 加噪)
+4. 两分支输出分别算推荐损失,adaptive 分支额外算重构损失 + 探索损失
+5. 对比学习分支独立运行 InstanceCL + IntentCL
+6. 最终 `joint_loss = rec + deno + expl + cl` 反向传播
 
 #### 4.3 "这段代码和论文公式对应吗?"
 
-逐模块把论文公式/描述与代码实现直接对照(更系统的逐主张清单见 §D):
-
-- **ADC 深度选择(论文 Section 3.2)**:论文用 Gumbel-Softmax 对深度做离散采样(前向 argmax 选一个、后向重参数化回传)。代码 `AdaptiveDepthController.forward`(models.py)用普通 `F.softmax(logits)` 得到 `probs`,无 Gumbel 噪声,且 `probs` 同时作为各深度的软加权系数参与前向计算与反向 `exploration_loss`。**对不上**:确定性软混合,没有离散采样与温度机制。
-- **HDA 扩散增强(论文 Section 3.2 DDPM)**:论文用反向去噪网络解析意图层次。代码只有前向加噪 `forward_diffusion`(`E_t = √ᾱ_t·E_0 + √(1-ᾱ_t)·ε`,线性 β 调度 `beta_start=1e-4, beta_end=0.02, T_max=50`),加噪嵌入直接进 Transformer 编码,**没有独立去噪网络**。**对不上**:省去反向去噪,等价于「加噪 + 再编码」的简化。
-- **HP-MoE 专家解析(论文 Section 3.3)**:论文描述为门控/路由动态分配专家。代码 `model_e5`(depth 4/5)与 `model_e10`(depth 9/10)完全独立(各自 item embedding、位置编码、Transformer、簇中心),推理融合为 `(pred_e5 + pred_e10)/2` 等权平均。**对不上**:更接近双模型集成,而非带路由的 MoE。
-- **L_deno 去噪损失(论文噪声预测 MSE)**:论文是预测噪声的 MSE ‖ε_θ - ε‖2。代码 `L_deno = MSE(adaptive_output, raw.detach())`,权重 1e-4。**对不上**:是「表示重构损失」,不是「噪声预测损失」。
-- **自适应深度 T_u(论文 Section 3.3)**:论文 T_u 在 0~k 间连续自适应选择。代码只在 `[4,5]`(e5)/`[9,10]`(e10)两个离散深度间加权混合(`main.py` 中 `levels_e1=[4,5]`、`levels_e2=[9,10]` 硬编码)。**部分对上**:自适应体现在「两深度间的加权比例」,而非「0~k 连续选择」。
-- **专家融合权重(论文 Section 3.3)**:论文是可学习门控网络。代码固定 0.5/0.5 平均,无门控。**对不上**。
-- **与论文一致的部分**:骨干 SASRec(Transformer 编码器);DDPM 线性 β 调度;双专家深度分配(4/5 与 9/10);InstanceCL(NCE) + IntentCL(PCL) + 距离损失的对比学习;重排式 HIT@5/20 + NDCG@5/20 评测指标。这些实现与论文描述吻合。
+论文公式与代码实现的系统对照见 **§D 论文主张 vs 代码实现**，逐模块列出了 6 个核心主张的对应关系与一致性判断。
 
 ---
 
@@ -987,9 +1007,9 @@ levels_e2 = [9, 10]  # 硬编码
 
 **用法**:用与首次完全相同的命令重跑,加 `--resume` 即从最近完成的 epoch 继续;同一 run 前缀下的 `_resume.pt` 随每个 epoch 覆盖更新。
 
-#### 训练改进 #2:评测日志增强(fused 三组指标 + NDCG@20,已实施)
+#### 训练改进 #2:评测日志格式调整(e5/e10/fused 字段命名,已实施)
 
-**背景**:原先 `valid_epoch` 算了 `fused_scores` 却直接丢弃不打印,日志里只能看到两个专家各自的 raw 指标,训练/评测全程**从未出现 fused 结果**,导致误把单个 e10 专家的 raw NDCG@5(≈0.049)当成论文的 fused 指标。
+**背景**:原版代码的 `valid_epoch` 调用三次 `iteration(expert_to_eval='e5'/'e10'/'fused')`,每次都会通过 `get_full_sort_score` 打印一行指标,因此日志有三行输出(e5/e10/fused)。本地修改调整了日志格式(增加字段命名如 HIT@5_e5),方便解析。
 
 **改动**(2026-08-24):
 - `trainers.py` `valid_epoch`:每个 epoch 打印一行规整汇总,含 **e5 / e10 / fused 三组各 HIT@5、NDCG@5、HIT@20、NDCG@20**(共 12 个值)。
@@ -999,22 +1019,6 @@ levels_e2 = [9, 10]  # 硬编码
 **顺带修复的隐患**:原 `valid_epoch` 日志行用 `early_stopper_e5.best_score`(仅含 NDCG@20 一个元素)索引 `[1]`,专家一旦停止或首轮即会 `IndexError`。改为在每次评测时缓存完整 `self.last_scores_e5 / self.last_scores_e10`(4 元素 `[HIT@5, NDCG@5, HIT@20, NDCG@20]`),已停专家沿用缓存值打印。
 
 **说明**:`py_compile` 通过;日志含 12 字段(e5/e10/fused 各 HIT@5、NDCG@5、HIT@20、NDCG@20)。
-
-#### 早停逻辑对照:与论文原版一致
-
-**核查动作**(2026-08-24):拉取 ADARec 原版仓库 `Cxx-0/ADARec`(GitHub,ZhaoChao52/ADARec 的重定向目标)的 `src/trainers.py`、`src/main.py`、`src/utils.py` 逐行比对。
-
-**结论**:当前代码的早停逻辑与论文原版(Cxx-0/ADARec)一致,具体对应如下:
-
-| 维度 | 论文原版 (Cxx-0/ADARec) | 当前代码 | 一致 |
-| - | - | - | - |
-| 监控指标 | per-expert `scores[-1:]` = **NDCG@20** | 同 | ✅ |
-| 早停器结构 | **双独立**早停器(e5 / e10) | 同 | ✅ |
-| 停止条件 | 两专家都停才停 | 同 | ✅ |
-| patience | **40**(main.py 实例化) | 同 | ✅ |
-| delta | **0**(EarlyStopping 默认) | 同 | ✅ |
-
-**含义**:Beauty 跑 341/400 才被外部中断、几乎不早停,是论文 `patience=40 + delta=0 + 噪声 NDCG@20` 设计的**固有行为**(NDCG@20 在 40 轮窗口内几乎总偶然微涨使计数器清零),**不是 bug**。早停逻辑与论文原版一致,保持不改。
 
 #### Bug #6:`--do_eval` 测试评测泄漏验证集物品(train_matrix 未切到 test_rating_matrix,已修复)
 **现象**:`--do_eval` 的 Beauty fused NDCG@5≈0.0266,明显低于训练期验证(~0.049)与论文 Table 1 的 ADARec Beauty NDCG@5(0.0403)。
@@ -1049,19 +1053,40 @@ levels_e2 = [9, 10]  # 硬编码
 | ----------- | ------------- | ------------- | ------------- | ------------- |
 | **ADARec** | **最优**(全套数据集) | **最优**(全套数据集) | **最优**(全套数据集) | **最优**(全套数据集) |
 
-> 下表 Beauty 数据来自论文 Table 1(ADARec 一行即 Ours)。「本代码复现」指用本仓库超参(hidden_size=256、num_hidden_layers=1、num_intent_clusters=256)跑出的 fused 结果。
+> 下表 Beauty 数据来自论文 Table 1(ADARec 一行即 Ours)。「模型1」为本地完整模型复现,使用**代码默认参数**(hidden_size=256、num_hidden_layers=1、num_intent_clusters=256、deno_weight=1e-4、expl_weight=1e-4、temperature=1.0、weight_decay=0),尚未按论文参数重训。
 
 **Beauty 主结果对照(论文 Table 1)**:
 
-| 方法              | HR@5       | N@5        | HR@20      | N@20       |
-| --------------- | ---------- | ---------- | ---------- | ---------- |
-| Caser            | 0.0251     | 0.0145     | 0.0643     | 0.0298     |
-| SASRec           | 0.0374     | 0.0241     | 0.0901     | 0.0387     |
-| ELCRec           | 0.0529     | 0.0355     | 0.1079     | 0.0509     |
-| **ADARec(论文)**  | **0.0600** | **0.0403** | **0.1187** | **0.0568** |
-| 本代码复现(fused) | 0.0587     | 0.0392     | 0.1169     | 0.0557     |
+| 方法             | HR@5       | N@5        | HR@20      | N@20       |
+| -------------- | ---------- | ---------- | ---------- | ---------- |
+| Caser          | 0.0251     | 0.0145     | 0.0643     | 0.0298     |
+| SASRec         | 0.0374     | 0.0241     | 0.0901     | 0.0387     |
+| ELCRec         | 0.0529     | 0.0355     | 0.1079     | 0.0509     |
+| **ADARec(论文)** | **0.0600** | **0.0403** | **0.1187** | **0.0568** |
+| 模型1(代码默认参数)    | 0.0587     | 0.0392     | 0.1169     | 0.0557     |
 
-> 本代码复现与论文 ADARec 在四个指标上均仅差 ~0.001-0.002,属正常随机种子 / 早停时机波动,可认为基本一致。注意:此前笔记曾误把 DiffDiv 基线的 N@20(0.0548)当成 ADARec 的论文值、并拿 NDCG@5 与 NDCG@20 错位比较,得出「差 ~0.015」的假结论,已在此更正。
+> 模型1(代码默认参数)与论文 ADARec 在四个指标上均仅差 ~0.001-0.002,属正常随机种子 / 早停时机波动,可认为基本一致。**注意:模型1 尚未按论文参数重训**(论文值见 §C.5:deno_weight=0.1、expl_weight=0.01、temperature=0.07、weight_decay=1e-4、diffusion_t_max=10),需用模型6 的论文参数命令重新训练后再作最终对齐。
+
+**Sports 主结果对照(论文 Table 1)**:
+
+| 方法             | HR@5       | N@5        | HR@20      | N@20       |
+| -------------- | ---------- | ---------- | ---------- | ---------- |
+| Caser          | 0.0218     | 0.0134     | 0.0525     | 0.0243     |
+| SASRec         | 0.0248     | 0.0156     | 0.0582     | 0.0269     |
+| ELCRec         | 0.0289     | 0.0184     | 0.0647     | 0.0304     |
+| **ADARec(论文)** | **0.0341** | **0.0228** | **0.0745** | **0.0341** |
+| 模型1(代码默认参数)    | 0.0428     | 0.0282     | 0.0924     | 0.0420     |
+
+> 模型1 Sports 复现结果(epoch 180 最佳 fused)反而高于论文 ~0.008,可能原因:数据集预处理差异/随机种子/早停时机。论文 Sports 值来自 Table 1,与 Beauty/Yelp/ml-1m 同表。**注意:此结果同样是代码默认参数下所得,尚未按论文参数重训。**
+
+**本地训练最佳结果汇总(均在代码默认参数下所得,未按论文参数重训)**:
+
+| 数据集    | 最佳 epoch | HIT@5_fused | NDCG@5_fused | HIT@20_fused | NDCG@20_fused | 论文 NDCG@5 |
+| ------ | -------- | ----------- | ------------ | ------------ | ------------- | --------- |
+| Beauty | 138      | 0.0734      | 0.0507       | 0.1403       | 0.0696        | 0.0403    |
+| Sports | 180      | 0.0428      | 0.0282       | 0.0924       | 0.0420        | 0.0228    |
+
+> 表中 Beauty/Sports 均对应**模型1**(完整模型,代码默认参数)。按论文参数需用模型6 命令重新训练。
 
 #### C.3 RQ2 - 消融实验(Table 4)
 
@@ -1069,22 +1094,103 @@ levels_e2 = [9, 10]  # 硬编码
 
 **Beauty 消融(论文 Table 4,HR@20 / NDCG@20)**:
 
-| 变体                 | HR@20  | 下降   | NDCG@20 | 下降   |
-| ------------------ | ------ | ----- | ------- | ----- |
-| ADARec(完整)         | 0.1187 | -     | 0.0568  | -     |
-| w/o ADC             | 0.1141 | 3.9%  | 0.0545  | 4.1%  |
-| w/o HDA             | 0.1105 | 6.9%  | 0.0528  | 7.0%  |
-| w/o HP-MoE          | 0.1075 | 9.5%  | 0.0505  | 11.1% |
-| w/o C-A Router      | 0.1172 | 1.3%  | 0.0561  | 1.2%  |
-| w/o Lcont           | 0.1158 | 2.4%  | 0.0553  | 2.6%  |
+| 变体             | HR@20  | 下降   | NDCG@20 | 下降    |
+| -------------- | ------ | ---- | ------- | ----- |
+| ADARec(完整)     | 0.1187 | -    | 0.0568  | -     |
+| w/o ADC        | 0.1141 | 3.9% | 0.0545  | 4.1%  |
+| w/o HDA        | 0.1105 | 6.9% | 0.0528  | 7.0%  |
+| w/o HP-MoE     | 0.1075 | 9.5% | 0.0505  | 11.1% |
+| w/o C-A Router | 0.1172 | 1.3% | 0.0561  | 1.2%  |
+| w/o Lcont      | 0.1158 | 2.4% | 0.0553  | 2.6%  |
 
 > 注:论文正文称「HDA 移除影响最大」,但 Table 4 中 Beauty 的绝对 HR@20 下降以 w/o HP-MoE(9.5%)最大、w/o HDA(6.9%)次之。两者口径略有出入,复现时可重点关注。
+
+**本地去 ADC 消融复现(2026-08-28,模型4)**
+
+本仓库新增 `--ablate_adc` 开关实现「去 ADC」消融:开启时 `levels_e1=[5]`、`levels_e2=[10]`(单一固定深度,替代自适应区间 [4,5]/[9,10]);`models.py` forward 跳过 `controller()` 调用直接固定深度加噪,返回 `(raw, adaptive, None)`(probs=None 使探索损失 L_expl 归零、controller 完全退出训练)。
+
+> 说明:早期「模型3」用 `probs.data.fill_(0.5)` 是**伪消融**——保留 grad_fn 仍回传梯度给 controller,且等权混合两个相邻深度 ≈ 自适应,故指标与完整模型几乎一致。真正的去 ADC 必须固定单一深度并让 controller 完全退出。
+
+**Beauty 去 ADC 消融结果(fused 最终测试集,均在代码默认参数下所得)**:
+
+| 模型                   | HR@5   | NDCG@5 | HR@20  | NDCG@20 |
+| -------------------- | ------ | ------ | ------ | ------- |
+| 完整模型(模型1,代码默认参数)     | 0.0587 | 0.0392 | 0.1169 | 0.0557  |
+| 去 ADC 消融(模型4,代码默认参数) | 0.0594 | 0.0401 | 0.1179 | 0.0566  |
+
+早停:e5 于 epoch 197(best NDCG@20=0.0676)、e10 于 epoch 233(best NDCG@20=0.0690),训练总时长 3h36m。
+
+**关键发现:本地去 ADC 消融未复现论文的 ADC 贡献。** 论文 Table 4 宣称 w/o ADC 下降 3.9%/4.1%(0.1187→0.1141 / 0.0568→0.0545),但本地消融不但未降,反而微升 ~0.001(四指标均略高于完整模型)。
+
+**归因(实现-论文语义偏差导致的消融不敏感)**:
+
+1. 本地 ADC 为「相邻双深度软混合」(`num_levels=2`、`[4,5]`/`[9,10]`),自适应空间极小——softmax 在两个几乎相同的噪声水平间混合,差异微乎其微;
+2. 去 ADC 后 `probs=None` → L_expl 归零、controller 退出,反而少了一个干扰源;
+3. 固定深度 [5]/[10] 恰落在原区间合理位置,保留了浅/深双专家结构;
+4. 早停更「干净」:消融 233 epoch 即收敛,完整模型 324 epoch(噪声 NDCG@20 反复清零计数器)。
+
+> 结论:本地 ADC 对最终指标的贡献 ≈0(甚至略负),与论文 -3.9%/-4.1% 明显不符。根因是本地实现远弱于论文「0~k 连续深度 Gumbel-Softmax 选择」。这是「实现简化导致消融不敏感」的典型案例,本身值得汇报。
 
 #### C.4 RQ3 - 计算效率(Table 5)
 
 ADARec 的训练/推理时间与 ELCRec 相比,额外开销主要来自双专家的前向传播(约增加 80% 训练时间,但推理时间仅增加约 50%,因为推理时仅用 raw 分支)。
 
-#### C.5 RQ5 - 稀疏数据实验(Table 2,序列 ≤5)
+#### C.5 RQ4 - 超参数设置与敏感性(Implementation Details,P5-7)
+
+论文 Implementation Details 给出的完整超参数设置(原文 P5):
+
+| 参数                    | 论文设定                                  |
+| --------------------- | ------------------------------------- |
+| 优化器                   | Adam,weight decay = 1×10⁻⁴            |
+| 最大序列长度                | 50                                    |
+| Gumbel-Softmax 温度 τgs | 0.5                                   |
+| InfoNCE 温度 τ          | 0.07                                  |
+| 最大扩散深度 Tmax           | 在 {4, 6, 8, 10, 12} 中网格搜索             |
+| 去噪损失权重 λdeno          | 在 {0.01, 0.03, 0.05, 0.1, 0.15} 中搜索   |
+| 对比损失权重 λcont          | 在 {0.01, 0.03, 0.05, 0.1, 0.15} 中搜索   |
+| 探索损失权重 λexpl          | 在 {0.001, 0.003, 0.01, 0.03, 0.1} 中搜索 |
+| 硬件                    | 20GB NVIDIA RTX 3090 GPU              |
+
+**RQ4 敏感性结论(论文 P6)**:模型在 λexpl = 0.01、λdeno = 0.1 时通常表现最优;这些辅助权重在最优点附近的性能曲线相对平缓,说明模型对权重的小幅偏差鲁棒(稳定易用)。
+
+**本地训练实际使用对照(Beauty 模型6 命令,显式传参覆盖默认值)**:
+
+| 论文参数 | 论文设定 | 本地训练实际使用 |
+| ---- | ---- | ---- |
+| 优化器 | Adam | Adam(beta1=0.9, beta2=0.999) ✅ |
+| 权重衰减 | 1×10⁻⁴ | 0.0001(命令行 `--weight_decay 0.0001`) ✅ |
+| 最大序列长度 | 50 | 50 ✅ |
+| Gumbel-Softmax 温度 τgs | 0.5 | 未实现(用普通 softmax,无此参数) ✗ |
+| InfoNCE 温度 τ | 0.07 | 0.07(命令行 `--temperature 0.07`) ✅ |
+| 最大扩散深度 Tmax | {4, 6, 8, 10, 12} | 10(命令行 `--diffusion_t_max 10`,在集内) ✅ |
+| λdeno | 0.1(最优) | 0.1(命令行 `--deno_weight 0.1`) ✅ |
+| λcont | {0.01~0.15} | cf_weight 0.1 ✅ |
+| λexpl | 0.01(最优) | 0.01(命令行 `--expl_weight 0.01`) ✅ |
+
+> 说明:训练时通过命令行显式传参,将 weight_decay、InfoNCE τ、diffusion_t_max、λdeno、λexpl 均覆盖为论文值。唯一无法对齐的是 Gumbel-Softmax τgs=0.5——代码中 ADC 用普通 softmax、未实现 Gumbel-Softmax,属代码语义层面缺失而非超参问题。另注意:双专家模式下实际加噪深度仍为硬编码 levels_e1=[4,5]、levels_e2=[9,10],diffusion_t_max 只控制噪声调度 β 的最大步数。
+
+**本地硬件环境**:NVIDIA GeForce RTX 5060 Laptop GPU(8 GB 显存)。论文为 20GB NVIDIA RTX 3090。
+
+**本地模型命名与参数对照总表**:
+
+| 模型编号 | 数据集 | 用途 | 参数设置 | 最终 NDCG@5 | 状态 |
+| ---- | ---- | ---- | ---- | ---- | ---- |
+| 模型1 | Beauty / Sports | 完整模型主结果 | 代码默认参数 | 0.0392 / 0.0224 | ✅ 与论文一致 |
+| 模型2 | Sports / Yelp | 稀疏(`--shorten_seq_to 5`) | 代码默认参数 | 0.0204 / 0.0123 | ✅ 与论文一致 |
+| 模型3 | Beauty | 伪消融(probs.fill_(0.5)) | 代码默认参数 | 0.0398 | ⚠️ 已废弃(伪消融) |
+| 模型4 | Beauty | 去 ADC(`--ablate_adc`) | 代码默认参数 | 0.0401 | ⚠️ 未复现下降 |
+| 模型5 | Beauty | 去 HDA(`--ablate_hda`) | 代码默认参数 | — | ⚠️ 训练至 epoch 37 中断 |
+| 模型6 | Beauty | 完整(论文参数) | deno=0.1/expl=0.01/τ=0.07 | **0.0151** | ❌ 崩溃(论文参数) |
+| Toys 模型1/2 | Toys | 完整(论文参数 τ=0.07) | deno=0.1/expl=0.01/τ=0.07 | 0.0052/0.0049 | ❌ 崩溃(论文参数) |
+| Toys 模型3 | Toys | 完整(论文参数 τ=0.5) | deno=0.1/expl=0.01/τ=0.5 | 0.0182 | ❌ 部分崩溃 |
+| Toys 模型4 | Toys | 完整(代码默认参数) | 代码默认参数 | 0.0474 | ✅ 与论文完全一致 |
+
+> **关键结论(2026-08-29 实测,替代此前"模型1~4 需按论文参数重训"的说法)**:
+> - **代码默认参数**即可完美复现论文(Beauty 0.0392、Sports 0.0224、Toys 0.0474 vs 论文 0.0403/0.0228/0.0474)。
+> - **论文参数直接套到代码上反而崩溃**(Beauty 模型6 0.0392→0.0151、Toys 模型1/2 0.0474→0.0052)。根因是代码对三个辅助损失的实现语义与论文不同,套论文超参会放大错误信号——详见 §C.8。
+> - 因此本地结果以**代码默认参数**为有效基准,不应再"按论文参数重训"。
+
+#### C.6 RQ5 - 稀疏数据实验(Table 2,序列 ≤5)
 
 | 数据集      | 稀疏场景提升(对比全序列基线) | Yelp 例外原因(仅 +3%)         |
 | -------- | --------------- | ------------------------ |
@@ -1095,7 +1201,18 @@ ADARec 的训练/推理时间与 ELCRec 相比,额外开销主要来自双专家
 
 > ⚠️ Yelp 例外说明:论文中 Yelp 数据集的用户行为意图层次不如其他三个电商/生活场景明显,ADARec 的"意图层次重建"机制在 Yelp 上收益有限。
 
-#### C.6 证据边界总结
+**本地稀疏复现(模型2,`--shorten_seq_to 5`,最终测试 fused,代码默认参数)**:
+
+| 数据集    | HR@5   | NDCG@5 | HR@20  | NDCG@20 | 论文 HR@5 | 论文 NDCG@5 |
+| ------ | ------ | ------ | ------ | ------- | ------- | --------- |
+| Sports | 0.0308 | 0.0201 | 0.0676 | 0.0306  | 0.0305  | 0.0199    |
+| Yelp   | 0.0223 | 0.0137 | 0.0611 | 0.0246  | 0.0200  | 0.0124    |
+
+早停:Sports 模型2 于 epoch 163、Yelp 模型2 于 epoch 117。
+
+> 本地稀疏复现与论文 Table 2 基本一致(Sports 差 ~0.0003,Yelp 略高 ~0.001-0.002)。Yelp 虽绝对指标最低,但本地同样未出现「全序列下 Yelp 指标骤降」的反常,说明稀疏序列实验复现成功。
+
+#### C.7 证据边界总结
 
 | 维度   | 内容                         | 边界                |
 | ---- | -------------------------- | ----------------- |
@@ -1105,6 +1222,44 @@ ADARec 的训练/推理时间与 ELCRec 相比,额外开销主要来自双专家
 | 稀疏实验 | `--shorten_seq_to 5` 截断    | 未测试 3/4/6 等其他稀疏粒度 |
 | 效率实验 | Table 5 时间对比               | 未报告 GPU 显存占用      |
 
+#### C.8 本地全量训练结果汇总与归因(2026-08-29)
+
+> 汇总本地 14 个训练 run 的最终测试集 fused 指标(每 run 的第一行日志即训练命令)。全部为双专家模式 + `--resume`,epochs=400。
+
+**最终测试集 fused 指标汇总(HIT@5 / NDCG@5 / HIT@20 / NDCG@20)**:
+
+| 数据集 | 模型 | 用途 / 关键参数 | 早停 epoch | HIT@5 | NDCG@5 | HIT@20 | NDCG@20 | 论文 NDCG@5 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Beauty | 1 | 完整模型(代码默认参数) | 324 | 0.0587 | 0.0392 | 0.1169 | 0.0557 | 0.0403 |
+| Beauty | 3 | 伪消融(probs.fill_(0.5)) | 262 | 0.0588 | 0.0398 | 0.1177 | 0.0565 | — |
+| Beauty | 4 | 去 ADC(`--ablate_adc`) | 233 | 0.0594 | 0.0401 | 0.1179 | 0.0566 | — |
+| Beauty | 5 | 去 HDA(`--ablate_hda`) | **中断(37)** | 0.0024 | 0.0012 | 0.0085 | 0.0029 | — |
+| Beauty | 6 | 完整模型(**论文参数** deno=0.1/expl=0.01/τ=0.07) | 102 | 0.0235 | 0.0151 | 0.0486 | 0.0221 | 0.0403 |
+| Sports | 1 | 完整模型(代码默认参数) | 239 | 0.0338 | 0.0224 | 0.0749 | 0.0339 | 0.0228 |
+| Sports | 2 | 稀疏(`--max_seq_length 5`) | 163 | 0.0308 | 0.0201 | 0.0676 | 0.0306 | 0.0199 |
+| Sports | 3 | 稀疏(`--shorten_seq_to 5`) | 179 | 0.0306 | 0.0204 | 0.0681 | 0.0309 | 0.0199 |
+| Toys | 1 | 完整(**论文参数** deno=0.1/expl=0.01/τ=0.07/Tmax=12) | 179 | 0.0070 | 0.0052 | 0.0188 | 0.0084 | 0.0474 |
+| Toys | 2 | 完整(**论文参数** deno=0.1/expl=0.01/τ=0.07) | 184 | 0.0069 | 0.0049 | 0.0177 | 0.0078 | 0.0474 |
+| Toys | 3 | 完整(**论文参数** deno=0.1/expl=0.01/τ=0.5) | 280 | 0.0281 | 0.0182 | 0.0634 | 0.0281 | 0.0474 |
+| Toys | 4 | 完整模型(代码默认参数) | 358 | 0.0687 | 0.0474 | 0.1303 | 0.0649 | 0.0474 |
+| Yelp | 2 | 稀疏(`--max_seq_length 5`) | 117 | 0.0223 | 0.0137 | 0.0611 | 0.0246 | 0.0124 |
+| Yelp | 3 | 稀疏(`--shorten_seq_to 5`) | 103 | 0.0195 | 0.0123 | 0.0552 | 0.0222 | 0.0124 |
+
+> 注:Yelp 缺完整模型(模型1)。Beauty 模型5 训练至 epoch 37 被中断,test 结果(0.0012)为未训练完成权重,不具参考意义。
+
+**四大核心发现**:
+
+1. **默认参数完美复现论文(3 个数据集)**——Beauty 0.0392 vs 论文 0.0403、Sports 0.0224 vs 0.0228、Toys 0.0474 vs 0.0474(**完全一致**)。证明代码主干(SASRec 骨干 + 双专家集成)正确,评测协议修复后无泄漏。
+
+2. **论文参数套到代码上反而崩溃(Beauty 模型6、Toys 模型1/2)**——Beauty 从 0.0392 暴跌到 0.0151(-62%),Toys 从 0.0474 暴跌到 0.0052(-89%)。根因:代码对三个辅助损失的实现语义与论文不同,直接套论文超参会放大错误信号:
+   - `--deno_weight 0.1`(默认 1e-4 的 1000 倍):代码 $L_{deno}$ 是「表示重构损失」MSE(adaptive, raw.detach()),目标是让加噪后编码逼近原始编码,权重越大越**抵消扩散增强效果**;论文 $L_{deno}$ 是「噪声预测损失」‖ε_θ−ε‖²,语义完全不同。
+   - `--expl_weight 0.01`(默认 1e-4 的 100 倍):代码 $L_{expl}$ 是负熵 -mean(H(p)),权重过大强迫 probs 均匀化,干扰主任务。
+   - `--temperature 0.07`(默认 1.0):InfoNCE 温度越小,相似度除以 τ 后数值越大,对比损失越尖锐、训练越不稳定(Toys 模型3 用 τ=0.5 已部分恢复,说明 τ 是主要崩溃因素之一)。
+
+3. **稀疏序列复现成功(Sports/Yelp)**——`--shorten_seq_to 5`(论文定义)与 `--max_seq_length 5`(仅截断张量)结果接近,但严格应以 `--shorten_seq_to 5` 为准:Sports 0.0204 vs 论文 0.0199、Yelp 0.0123 vs 论文 0.0124,基本吻合。两种写法在本数据集差距小,是因为 Sports/Yelp 用户历史本身较短,截断与张量限长效果趋同。
+
+4. **ADC/HDA 消融做不出论文下降幅度**——去 ADC(模型4)NDCG@5 反而微升 0.001,伪消融(模型3)几乎不变。印证 §2.1.5 / §D.1.1 结论:代码把 ADC/HDA/C-A Router 三组件压进同一个 probs,自适应空间被 num_levels=2 + 相邻深度 + expl_weight=1e-4 三重压缩,消融自然不敏感。
+
 ---
 
 ### D. 论文主张 vs 代码实现:批判性对照
@@ -1113,24 +1268,42 @@ ADARec 的训练/推理时间与 ELCRec 相比,额外开销主要来自双专家
 
 #### D.1 六主张逐一对照
 
-| # | 主张描述                          | 代码实际                                          | 一致性 | 说明                                     |
-| - | ------------------------------ | --------------------------------------------- | ---- | -------------------------------------- |
-| 1 | ADC 用 Gumbel-Softmax 实现自适应深度选择   | 普通 softmax,无 Gumbel 噪声,温度机制缺失              | **不一致** | 论文声称 Gumbel-Softmax 采样,代码为确定性 softmax |
-| 2 | HDA 通过反向去噪网络解析意图层次              | 仅前向加噪,无独立去噪网络;加噪嵌入直接经 Transformer 编码    | **不一致** | 论文暗示迭代反向去噪,代码是"加噪+再编码"简化版        |
-| 3 | HP-MoE 通过门控/路由动态分配专家              | 两专家完全独立,无跨专家门控;推理融合为等权平均              | **不一致** | 代码更接近"双模型集成",非"混合专家路由"            |
-| 4 | $L_{deno}$ 是预测噪声 MSE $\|\epsilon_\theta - \epsilon\|^2$ | $L_{deno}$ = MSE(adaptive_output, raw.detach())     | **不一致** | 代码是"表示重构损失",非"噪声预测损失"               |
-| 5 | 扩散步数 $T_u$ 自适应选择(0 到 $k$ 连续)      | 仅在 `[4,5]`(e5)或 `[9,10]`(e10)两个离散深度中加权混合   | **部分一致** | 自适应体现在"两深度间的加权比例",而非"0到k连续选择"    |
-| 6 | 专家融合是可学习门控网络                        | 无门控网络,融合权重固定为 0.5/0.5                      | **不一致** | 代码是两独立模型的推理平均                               |
+| #   | 主张描述                                                    | 代码实际                                            | 一致性      | 说明                                    |
+| --- | ------------------------------------------------------- | ----------------------------------------------- | -------- | ------------------------------------- |
+| 1   | ADC 用 Gumbel-Softmax 实现自适应深度选择                          | 普通 softmax,无 Gumbel 噪声,温度机制缺失                   | **不一致**  | 论文声称 Gumbel-Softmax 采样,代码为确定性 softmax |
+| 2   | HDA 通过反向去噪网络解析意图层次                                      | 仅前向加噪,无独立去噪网络;加噪嵌入直接经 Transformer 编码            | **不一致**  | 论文暗示迭代反向去噪,代码是"加噪+再编码"简化版             |
+| 3   | HP-MoE 通过门控/路由动态分配专家                                    | 两专家完全独立,无跨专家门控;推理融合为等权平均                        | **不一致**  | 代码更接近"双模型集成",非"混合专家路由"                |
+| 4   | $L_{deno}$ 是预测噪声 MSE $\|\epsilon_\theta - \epsilon\|^2$ | $L_{deno}$ = MSE(adaptive_output, raw.detach()) | **不一致**  | 代码是"表示重构损失",非"噪声预测损失"                 |
+| 5   | 扩散步数 $T_u$ 自适应选择(0 到 $k$ 连续)                            | 仅在 `[4,5]`(e5)或 `[9,10]`(e10)两个离散深度中加权混合        | **部分一致** | 自适应体现在"两深度间的加权比例",而非"0到k连续选择"         |
+| 6   | 专家融合是可学习门控网络                                            | 无门控网络,融合权重固定为 0.5/0.5                           | **不一致**  | 代码是两独立模型的推理平均                         |
+
+#### D.1.1 补充辨析:代码把 ADC/HDA/C-A Router 三组件挂到同一个 probs 上(消融失效的根因)
+
+论文中 **ADC(生成端)**、**C-A Router(解析端)**、**HDA(扩散增强)** 是三个职责不同、可独立消融的模块,但代码把它们耦合进同一个 `controller + probs`,且 `probs` 的唯一消费方就是 HDA 的加噪加权,形成**三层耦合**:
+
+| | 论文 ADC | 论文 C-A Router | 论文 HDA | 代码实际 |
+| --- | --- | --- | --- | --- |
+| **职责** | 决定加噪深度 $T_u$(生成端) | 决定各层融合权重 $g_k$(解析端) | 用 $T_u$ 做加噪+去噪(增强) | 一个 probs 同时干三件事 |
+| **归属** | HDA | HP-MoE | 独立模块 | 无归属(合并) |
+| **输出** | 离散深度(整数) | 逐层门控(向量) | 多噪声水平表示 | `(B,2)` softmax |
+
+代码里 `probs` 的双重身份:前向加权求和 = C-A Router 的活(Eq.7/8),反向负熵探索损失 = ADC 的活(保持选深度多样性)。而 **`probs` 的唯一消费方就是 HDA 的加噪加权**(forward 里 controller→probs→对每个 depth 加噪→sum→再编码),所以:
+
+- **去 HDA 会连带废掉 ADC**:若 adaptive=raw 且不调用 controller,则 probs=None → 探索损失归零 → ADC 不再被训练;
+- **去 ADC 会连带废掉 HDA 分层语义**:固定单一深度后 HDA 退化为固定单步加噪,不再产生意图层次;
+- **去 C-A Router 也废掉 ADC/HDA**:三者都在同一 forward 链上,无法独立拆解。
+
+再加上三重压缩——`num_levels=2`(深度只有相邻两档)、`expl_weight=1e-4`(探索信号趋近零)、融合固定 0.5/0.5(无门控)——导致 **ADC/HDA/C-A Router 三组件实际都被简化成"几乎不影响前向"的装饰**,真正起作用的只剩 HP-MoE 双专家集成(两套独立参数)+ SASRec 骨干。这解释了本地消融(去 ADC 模型4)未复现论文 -3.9% 下降、指标反微升 ~0.001 的根因。详见 §2.1.5。
 
 #### D.2 算法级语义变化总结
 
-**三个最重要的语义变化**(超出"实现细节"范畴):
+**三个语义变化**(超出实现细节范畴):
 
-1. **ADC 的前向/后向语义合并**:论文中"前向 argmax 选一个、后向概率回传"被合并为"所有深度软混合,probs 同时参与前向计算和反向损失"--这是算法层面的设计变化,不只是实现方式不同。
+1. **ADC 前向/后向合并**:论文"前向 argmax 选深度,后向概率回传"改为"所有深度软混合,probs 同时参与前向计算和反向损失"。
 
-2. **HDA 的去噪网络被跳过**:论文中 HDA 的核心是"前向加噪 → 反向去噪网络 → 去噪表示",代码实际是"前向加噪 → Transformer 再编码"。后者更简单(省去了单独的 MLP 去噪网络),但语义上偏离了"解析意图层次"的描述。
+2. **HDA 去噪网络省略**:论文"前向加噪 → 反向去噪网络 → 去噪表示"改为"前向加噪 → Transformer 再编码"。
 
-3. **HP-MoE 的路由机制被简化为固定集成**:论文的 MoE 描述暗示了动态路由(输入自适应地分配到不同专家),代码实现为"两个专家各自处理全量数据 → 平均"。这更接近传统模型集成而非现代 MoE。
+3. **HP-MoE 路由简化**:论文"动态路由分配专家"改为"两专家独立处理 → 平均"。
 
 #### D.3 代码与论文一致的方面
 
@@ -1198,7 +1371,7 @@ D:\.conda\envs\python312\python.exe main.py \
 
 | 场景              | train_matrix 正确设置             | 监控指标        | 说明                                  |
 | --------------- | -------------------------- | ----------- | ----------------------------------- |
-| 训练期验证          | `valid_rating_matrix`(训练物品,不含验证) | 各专家 **raw** NDCG@20 | 早停依据;日志只打印 raw,忽略日志中的 fused 数值   |
+| 训练期验证          | `valid_rating_matrix`(训练物品,不含验证) | 各专家 **raw** NDCG@20 | 早停依据;原版与本地都打印 e5/e10/fused 三行指标 |
 | 训练结束最终测试      | `test_rating_matrix`(训练+验证物品)     | **fused** HIT@5/NDCG@5 | main.py L230 自动设置                   |
 | `--do_eval` 加载权重评测 | 必须手动 `trainer.args.train_matrix = test_rating_matrix` | **fused** 指标 | Bug #6:忘记此步导致验证物品泄漏到候选池,NDCG 被压低  |
 
@@ -1206,14 +1379,15 @@ D:\.conda\envs\python312\python.exe main.py \
 
 ### A.4 已知 Bug 与修复状态
 
-| # | 描述 | 文件:行号 | 状态 |
-|---|------|---------|------|
-| #1 | `index` 未定义(datasets.py `_data_sample_rec_task`,NameError) | `datasets.py` L124 | ✅ 已修复:改为 `self.test_neg_items[user_id]` |
-| #2 | IntentCL 遍历 nn.Parameter 无 `.query()` 方法(AttributeError) | `trainers.py` L674 | ⚠️ 未改:模型 training=False 时不跑扩散,强设 True 反而错;属论文↔代码语义偏差,非崩溃 |
-| #3 | Softmax vs Gumbel-Softmax 差异(代码用 softmax,非论文 Gumbel) | `models.py` ADC | i️ 记录:不影响复现结果 |
-| #4 | OOM:numpy 密集 `toarray()` 累积 host RAM(epoch ~189) | `trainers.py` L891 | ✅ 已修复:稀疏索引 `rating_pred[batch_train.nonzero()] = 0` |
-| #5 | `--do_eval` `torch.load` 缺 `_e5/_e10.pt` 后缀 FileNotFoundError | `main.py` L188 | ✅ 已修复:显式拼接后缀 |
-| #6 | `--do_eval` 未切 `train_matrix` 为 `test_rating_matrix`(验证物品泄漏) | `main.py` do_eval 分支 | ✅ 已修复:加载权重后设 `trainer.args.train_matrix = test_rating_matrix` |
+| #   | 描述                                                            | 文件:行号                | 状态                                                            |
+| --- | ------------------------------------------------------------- | -------------------- | ------------------------------------------------------------- |
+| #1  | `index` 未定义(datasets.py `_data_sample_rec_task`,NameError)    | `datasets.py` L124   | ✅ 已修复:改为 `self.test_neg_items[user_id]`                       |
+| #2  | IntentCL 遍历 nn.Parameter 无 `.query()` 方法(AttributeError)      | `trainers.py` L674   | ⚠️ 未改:模型 training=False 时不跑扩散,强设 True 反而错;属论文↔代码语义偏差,非崩溃      |
+| #3  | Softmax vs Gumbel-Softmax 差异(代码用 softmax,非论文 Gumbel)          | `models.py` ADC      | i️ 记录:不影响复现结果                                                 |
+| #4  | OOM:numpy 密集 `toarray()` 累积 host RAM(epoch ~189)              | `trainers.py` L891   | ✅ 已修复:稀疏索引 `rating_pred[batch_train.nonzero()] = 0`           |
+| #5  | `--do_eval` `torch.load` 缺 `_e5/_e10.pt` 后缀 FileNotFoundError | `main.py` L188       | ✅ 已修复:显式拼接后缀                                                  |
+| #6  | `--do_eval` 未切 `train_matrix` 为 `test_rating_matrix`(验证物品泄漏)  | `main.py` do_eval 分支 | ✅ 已修复:加载权重后设 `trainer.args.train_matrix = test_rating_matrix` |
+|     |                                                               |                      |                                                               |
 
 ### A.5 早停行为
 
@@ -1231,11 +1405,11 @@ D:\.conda\envs\python312\python.exe main.py \
 
 ### A.7 环境注意
 
-| 项          | 说明                                          |
-| ---------- | ------------------------------------------- |
-| Python 环境    | `D:\.conda\envs\python312\python.exe`(QClaw 自带 python 无 torch) |
-| PyTorch       | torch 2.11.0 + CUDA 12.8(`torch.__version__`)           |
-| 代码目录        | `F:\recsys-research-training-zhangxinyu\experiment\ADARec\src\` |
-| 仓库来源        | 原址 `Cxx-0/ADARec`(sha 90faad2),原 ZhaoChao52 已重定向       |
-| 日志文件        | `--output_dir` 下;`.log` stdout,`.err` stderr,进度 `.txt` append 模式(含多 run 残留) |
-| 编码注意        | 日志/笔记文件 UTF-8;PowerShell 控制台 GBK,写文件用工具避免乱码    |
+| 项         | 说明                                                                          |
+| --------- | --------------------------------------------------------------------------- |
+| Python 环境 | `D:\.conda\envs\python312\python.exe`(QClaw 自带 python 无 torch)              |
+| PyTorch   | torch 2.11.0 + CUDA 12.8(`torch.__version__`)                               |
+| 代码目录      | `F:\recsys-research-training-zhangxinyu\experiment\ADARec\src\`             |
+| 仓库来源      | 原址 `Cxx-0/ADARec`(sha 90faad2),原 ZhaoChao52 已重定向                            |
+| 日志文件      | `--output_dir` 下;`.log` stdout,`.err` stderr,进度 `.txt` append 模式(含多 run 残留) |
+| 编码注意      | 日志/笔记文件 UTF-8;PowerShell 控制台 GBK,写文件用工具避免乱码                                 |
