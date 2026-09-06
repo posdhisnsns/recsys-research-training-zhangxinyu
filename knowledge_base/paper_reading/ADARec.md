@@ -1037,6 +1037,22 @@ levels_e2 = [9, 10]  # 硬编码
 
 #### C.1 研究问题的实验映射
 
+> 论文 Experiments 章节开篇明确提出 5 个研究问题（Research Questions），实验设计全部围绕回答这 5 问展开。完整问句（英文原文 + 中文翻译）如下：
+
+**论文原文（Experiments, P5）**：
+
+> *We conduct extensive experiments to evaluate our proposed ADARec framework, aiming to answer the following research questions:*
+
+| 编号 | 英文原文（完整问句） | 中文翻译 |
+| --- | --- | --- |
+| **RQ1** | Does ADARec outperform state-of-the-art SR models and can it effectively enhance the performance of various intent-based backbone models? | ADARec 是否优于 SOTA 序列推荐模型，且能否有效提升各类「基于意图」的骨干模型的性能？ |
+| **RQ2** | How effective are the key components of ADARec: the ADC, HDA, and HP-MoE? | ADARec 的三个关键组件（ADC、HDA、HP-MoE）各自有多有效？ |
+| **RQ3** | How computationally efficient is ADARec? | ADARec 的计算效率如何？ |
+| **RQ4** | How sensitive is ADARec's performance to its main hyperparameters? | ADARec 的性能对其主要超参数有多敏感？ |
+| **RQ5** | Can ADARec effectively construct hierarchical user intents from sparse data? | ADARec 能否从稀疏数据中有效构建层次化的用户意图？ |
+
+> 每个 RQ 对应一组实验/图表：RQ1→Table 1（主结果）+ Table 3（骨干组合）；RQ2→Table 4（消融）；RQ3→Table 5（效率）；RQ4→Figure 4（λ 敏感性）+ Figure 5（专家数）；RQ5→Table 2/3（稀疏序列）+ Figure 6（t-SNE）。
+
 | 研究问题                  | 对应实验                                   | 数据来源 |
 | --------------------- | -------------------------------------- | ---- |
 | RQ1:ADARec 是否优于 SOTA? | Table 1(全序列)+ Table 3(骨干组合)            | P5-6 |
@@ -1262,6 +1278,42 @@ ADARec 的训练/推理时间与 ELCRec 相比,额外开销主要来自双专家
 
 ---
 
+#### C.9 ADARec(2) 对齐版代码三组实验(2026-09-06)
+
+> 承接 §D 对原版「4 处语义差异」的批判:本地另建了 **ADARec(2)** 目录(`F:\recsys-research-training-zhangxinyu\experiment\ADARec(2)\src\`),把原版与论文不一致的 4 处全部补全对齐,再在 Sports_and_Outdoors 上跑了三组实验,检验「语义对齐后能否用论文超参复现、能否做出论文的消融下降」。
+
+**对齐版补全的 4 处语义(相对原版 ADARec)**:
+
+| # | 组件 | 原版实现 | 对齐版实现(models.py / modules.py) |
+| --- | --- | --- | --- |
+| 1 | ADC | 普通 `F.softmax`,无噪声无温度 | `gumbel_softmax`(modules.py L22-36):straight-through,前向 argmax 得 one-hot,反向沿 softmax 概率回传,τ_gs=0.5 |
+| 2 | HDA | 仅前向加噪,加噪后直接再编码,无去噪网络 | `DenoisingNetwork`(modules.py L336-365):MLP 预测噪声 ε_θ(E_k, k),按 Eq.5 重建 ê_k=(E_k−√(1−ᾱ_k)ε_θ)/√ᾱ_k |
+| 3 | HP-MoE | 双独立专家 + 固定 0.5/0.5 等权平均 | `ContentAwareRouter`(g_k,Eq.7)+ `gate_layer`(gate_u,Eq.10),元素级门控融合 h_u=gate_u⊙z_fin+(1−gate_u)⊙z_coar |
+| 4 | L_deno | 表示重构 MSE(adaptive, raw.detach()) | 噪声预测 MSE ‖ε_θ·mask − ε·mask‖²(trainers.py L688-690),与论文 Eq.5 对齐 |
+
+**三组实验命令与最终测试集 fused 指标(H@5 / N@5 / H@20 / N@20)**:
+
+| Run | model_idx | 关键配置 | 早停 epoch | H@5 | N@5 | H@20 | N@20 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 对齐版完整 + **论文超参**(deno=0.1/expl=0.01/τ=0.07/wd=1e-4/Tmax=10) | 132 | 0.0061 | 0.0043 | 0.0202 | 0.0080 |
+| 2 | 2 | 对齐版完整 + **默认参数**(deno=1e-4/expl=1e-4/τ=1.0/wd=0/Tmax=50) | 233→234 | 0.0332 | 0.0221 | 0.0734 | 0.0334 |
+| 3 | 3 | 对齐版 + 默认参数 + **`--ablate_hda`** | 277 | 0.0334 | 0.0222 | 0.0743 | 0.0337 |
+
+> 论文 Table 1 Sports ADARec:H@5=0.0341 / N@5=0.0228 / H@20=0.0745 / N@20=0.0341。
+> 论文 Table 4 消融 Sports:完整 0.0745/0.0341,w/o HDA 0.0681/0.0310(Δ=−0.0064/−0.0031),w/o HP-MoE 0.0645/0.0283(Δ=−0.0100/−0.0058),w/o ADC 0.0715/0.0328(Δ=−0.0030/−0.0013)。
+
+**三大发现**:
+
+1. **语义对齐后、默认参数即可复现论文(Run 2)**——四指标与论文差 ≤0.001(H@5 0.0332 vs 0.0341、N@5 0.0221 vs 0.0228、H@20 0.0734 vs 0.0745、N@20 0.0334 vs 0.0341)。与 §C.8 原版默认参数(Sports 0.0338/0.0224/0.0749/0.0339)几乎一致,说明**补全的 Gumbel-Softmax/去噪网络/门控路由在默认超参下并未带来可观测增益**——原版简化实现与论文对齐实现在最终指标上趋同。
+
+2. **论文超参套到对齐版代码上仍然崩溃(Run 1)**——N@5 从 0.0221 暴跌到 0.0043(−81%),H@20 0.0734→0.0202。这**推翻了 §C.8 的旧归因**(旧结论把崩溃归咎于「L_deno 是表示重构损失而非噪声预测」):现在 L_deno 已对齐为噪声预测 MSE,崩溃依旧,说明**根因不是损失语义,而是论文超参本身过激**——`deno_weight=0.1`(默认的 1000×)、`expl_weight=0.01`(默认的 100×)、`temperature=0.07`(InfoNCE 过尖锐)叠加,在去噪网络尚未训好的早期即主导梯度、干扰主任务。论文 Table 4 的「最优 λexpl=0.01、λdeno=0.1」在独立复现中无法落地。
+
+3. **HDA 消融做不出论文下降、方向甚至相反(Run 3 vs Run 2)**——去 HDA 后 H@20 0.0734→0.0743、N@20 0.0334→0.0337,**微升而非下降**,与论文 w/o HDA 的 −0.0064/−0.0031 完全相反。这延续并强化了 §D.1.1 的判断:即便语义对齐,扩散增强(HDA+去噪网络)在这套训练协议下对最终排序指标贡献 ≈0,论文消融表的下降幅度无法通过官方公开代码独立复现。
+
+> **小结**:三组实验共同指向一个结论——论文报告的核心增益(扩散增强 + 自适应深度 + 门控 MoE)在复现中高度依赖论文那套「激进的辅助损失权重」,而该套权重在独立复现中反而导致崩溃;退到温和默认参数时,模型退化为「SASRec 骨干 + 双专家集成」即可达到论文主结果水平。换言之,**可复现的增益主要来自骨干与双专家集成,而非扩散/ADC/门控三件套**。
+
+---
+
 ### D. 论文主张 vs 代码实现:批判性对照
 
 > 本节对论文的 6 个核心主张逐一对照代码实现,给出"论文声称"、"代码实际"和"一致性判断"。
@@ -1276,6 +1328,8 @@ ADARec 的训练/推理时间与 ELCRec 相比,额外开销主要来自双专家
 | 4   | $L_{deno}$ 是预测噪声 MSE $\|\epsilon_\theta - \epsilon\|^2$ | $L_{deno}$ = MSE(adaptive_output, raw.detach()) | **不一致**  | 代码是"表示重构损失",非"噪声预测损失"                 |
 | 5   | 扩散步数 $T_u$ 自适应选择(0 到 $k$ 连续)                            | 仅在 `[4,5]`(e5)或 `[9,10]`(e10)两个离散深度中加权混合        | **部分一致** | 自适应体现在"两深度间的加权比例",而非"0到k连续选择"         |
 | 6   | 专家融合是可学习门控网络                                            | 无门控网络,融合权重固定为 0.5/0.5                           | **不一致**  | 代码是两独立模型的推理平均                         |
+
+> **2026-09-06 更新**:上述 4 处「不一致」已在 ADARec(2) 对齐版代码中逐项补全(Gumbel-Softmax / 去噪网络 / 门控路由 / 噪声预测损失),但三组 Sports 实验表明:默认参数下对齐版与原版指标趋同、论文超参仍崩溃、HDA 消融仍做不出下降(详见 §C.9)。即「语义不一致」并非复现偏差的主因,论文的核心增益主要来自骨干 + 双专家集成。
 
 #### D.1.1 补充辨析:代码把 ADC/HDA/C-A Router 三组件挂到同一个 probs 上(消融失效的根因)
 
