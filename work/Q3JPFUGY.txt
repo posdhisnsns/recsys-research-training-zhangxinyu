@@ -1,0 +1,1798 @@
+Intent Contrastive Learning with Cross Subsequences for
+Sequential Recommendation
+Xiuyuan Qin∗
+Soochow University
+SuZhou, China
+20215227016@stu.suda.edu.cn
+Huanhuan Yuan∗
+Soochow University
+SuZhou, China
+hhyuan@stu.suda.edu.cn
+Pengpeng Zhao†
+Soochow University
+SuZhou, China
+ppzhao@suda.edu.cn
+Guanfeng Liu
+Macquarie University
+Sydney, NSW, Australia
+guanfeng.liu@mq.edu.au
+Fuzhen Zhuang
+Institute of Artificial Intelligence &
+SKLSDE, School of Computer Science
+Beihang University
+Beijing, China
+zhuangfuzhen@buaa.edu.cn
+Victor S. Sheng
+Texas Tech University
+Lubbock, United States
+victor.sheng@ttu.edu
+ABSTRACT
+The user purchase behaviors are mainly influenced by their in-
+tentions (e.g., buying clothes for decoration, buying brushes for
+painting, etc.). Modeling a user’s latent intention can significantly
+improve the performance of recommendations. Previous works
+model users’ intentions by considering the predefined label in aux-
+iliary information or introducing stochastic data augmentation to
+learn purposes in the latent space. However, the auxiliary informa-
+tion is sparse and not always available for recommender systems,
+and introducing stochastic data augmentation may introduce noise
+and thus change the intentions hidden in the sequence. Therefore,
+leveraging user intentions for sequential recommendation (SR) can
+be challenging because they are frequently varied and unobserved.
+In this paper, Intent contrastive learning with Cross Subsequences
+for sequential Recommendation (ICSRec) is proposed to model
+users’ latent intentions. Specifically, ICSRec first segments a user’s
+sequential behaviors into multiple subsequences by using a dynamic
+sliding operation and takes these subsequences into the encoder to
+generate the representations for the user’s intentions. To tackle the
+problem of no explicit labels for purposes, ICSRec assumes different
+subsequences with the same target item may represent the same
+intention and proposes a coarse-grain intent contrastive learning to
+push these subsequences closer. Then, fine-grain intent contrastive
+learning is mentioned to capture the fine-grain intentions of subse-
+quences in sequential behaviors. Extensive experiments conducted
+on four real-world datasets demonstrate the superior performance
+of the proposed ICSRec1 model compared with baseline methods.
+∗These authors contributed equally to this work.
+†Corresponding author.
+1Our code is available at https://github.com/QinHsiu/ICSRec.
+Permission to make digital or hard copies of all or part of this work for personal or
+classroom use is granted without fee provided that copies are not made or distributed
+for profit or commercial advantage and that copies bear this notice and the full citation
+on the first page. Copyrights for components of this work owned by others than the
+author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or
+republish, to post on servers or to redistribute to lists, requires prior specific permission
+and/or a fee. Request permissions from permissions@acm.org.
+WSDM ’24, March 4–8, 2024, Merida, Mexico
+© 2024 Copyright held by the owner/author(s). Publication rights licensed to ACM.
+ACM ISBN 979-8-4007-0371-3/24/03...$15.00
+https://doi.org/10.1145/3616855.3635773
+CCS CONCEPTS
+• Information systems →Collaborative filtering; Personal-
+ization.
+KEYWORDS
+Sequnetial Recommendation, Contrastive Learning, User Modeling,
+Recommendation System, Latent Intention Modeling
+ACM Reference Format:
+Xiuyuan Qin, Huanhuan Yuan, Pengpeng Zhao, Guanfeng Liu, Fuzhen
+Zhuang, and Victor S. Sheng. 2024. Intent Contrastive Learning with Cross
+Subsequences for Sequential Recommendation. In Proceedings of the 17th
+ACM International Conference on Web Search and Data Mining (WSDM
+’24), March 4–8, 2024, Merida, Mexico. ACM, New York, NY, USA, 9 pages.
+https://doi.org/10.1145/3616855.3635773
+1
+INTRODUCTION
+Recommender systems are widely studied in academia and industry
+for their ability to efficiently alleviate data overload by accurately
+capturing users’ preferences and providing personalized recom-
+mendation suggestions [1, 32, 49]. Sequential Recommendation
+(SR) [8, 15, 34, 40, 48], one of the best recommendation models
+for dynamically modeling user preferences, focus on predicting
+the next item that users are likely to interact with based on their
+chronological behaviors.
+Users’ purchase behaviors mainly depend on their intentions
+(e.g., buying a watch for decoration, buying books for reading,
+etc.) [5, 21]. Leveraging such intentions for SR can significantly im-
+prove the performance and robustness [20], and this has attracted
+widespread attention. The methods for modeling intentions can be
+divided into two categories based on whether or not to use auxil-
+iary information (e.g., user action types, item category information,
+etc.). Some exciting works [2, 20, 38] model users’ intentions by con-
+structing an auxiliary task (e.g., predicting the next item’s category,
+predicting the user’s next action type, etc.). Since such informa-
+tion is more sparse, does not always accurately reflect the user’s
+intentions, and may not be readily accessible [5], some other ex-
+citing works choose to capture user intentions in the latent space.
+DSSRec [26] infers the intentions based on individual sequence
+representation via clustering. SINE [35] proposes a sparse interest
+548
+
+WSDM ’24, March 4–8, 2024, Merida, Mexico
+Xiuyuan Qin et al.
+User1
+User3
+User2
+playing
+reading
+painting
+decorating
+gifting
+Figure 1: An example showing different interaction se-
+quences exist with subsequences of the same target item.
+extraction module to adaptively infer the interacted intentions of
+a user from a large pool of intention groups. ICLRec [5] obtains
+the intent prototype representation from the embedded space of
+all user behavior sequences via clustering and builds a contrastive
+learning task to leverage the learned intentions into the SR model.
+IOCRec [21] extracts intent representations from two stochastic
+augmented views for contrastive learning and further improves the
+performance by alleviating the noise problem.
+While the above attempts to construct contrastive learning tasks
+to learn the user’s intentions, they usually model each user interac-
+tion sequence individually and thus ignore the correlation between
+users with similar subsequence patterns [50]. Considering the ex-
+ample illustrated in Figure 1, User1 and User2 may purchase the
+item ‘watch’ for decorating at different steps. Meanwhile, User2 and
+User3 may buy the item ‘book’ for learning at different steps. Differ-
+ent users may have the same intention to purchase the same item at
+different moments. However, modeling sequences as a whole does
+not fully utilize the intent supervisory signals hidden in the history
+of different user interactions. Furthermore, the intention to buy the
+same item in different contexts may be different [25]. As shown in
+Figure 1, all three Users buy the item ‘tie’. User3 may buy it as a gift,
+but User1 and User2 may buy it for decoration. Ignoring this restric-
+tion may result in the model’s failure to learn the representation of
+the user’s intention, thus decreasing the performance.
+To address the above issues, we propose a novel model named
+ICSRec (i.e., Intent contrastive learning with Cross subsequences
+for Sequential Recommendation), which utilizes cross subsequences
+patterns to construct intent supervisory signals for intent repre-
+sentation learning. Specially, we first process the original training
+sequence into several subsequences via a split operation, and we
+put subsequences with the same target item into the same set to con-
+struct intent supervisory signals. ICSRec assumes that two different
+subsequences with the same target item have the same intention.
+Therefore, a coarse-grain intent contrastive learning method is
+introduced to put the two subsequences with the same intention
+closer. To alleviate the problem that the same item may represent
+different intentions in different contexts, we further propose a fine-
+grain intent contrastive leaning to make the subsequence closer
+to its intention prototype obtained by clustering. Finally, ICSRec
+achieves a significant improvement (average increase of 24%) com-
+pared with the State-Of-The-Art baselines on all datasets.
+We summarize the contributions of this work below:
+• ICSRec first utilizes a similar pattern hidden in cross subse-
+quences for intent representation learning in the SR task.
+• We propose two modules (i.e., coarse-grain intent learning mod-
+ule and fine-grain intent learning module ) to model the user’s
+intention from different dimensions.
+• Extensive experiments demonstrate that ICSRec achieves state-
+of-the-art performances on four publicity datasets.
+2
+THE PROPOSED MODEL
+2.1
+Problem Definition
+Sequential Recommendation (SR) is to recommend the next item
+that the user will interact with based on his/her historical interac-
+tion data. Assuming that 𝑈and 𝐼are the sets of users and items,
+𝑢∈𝑈has a sequence of interacted items 𝑆𝑢= {𝑠𝑢
+1,𝑠𝑢
+2, ...,𝑠𝑢
+|𝑆𝑢|}, and
+𝑠𝑢
+𝑡∈I(1 ≤𝑡≤|𝑆𝑢|) represents an interacted item at position 𝑡of
+user𝑢within the sequence, where |𝑆𝑢| denotes the sequence length.
+Given the historical interactions 𝑆𝑢, the goal of SR is to recommend
+an item from the set of items I that the user 𝑢may interact with
+at the |𝑆𝑢| + 1 step, which can be formulated as follows:
+arg max
+𝑖∈I 𝑃(𝑠𝑢
+|𝑆𝑢|+1 = 𝑖|𝑆𝑢).
+(1)
+2.2
+Overall Framework
+Figure 2 shows the overall framework of ICSRec. It mainly contains
+three parts, 1) Supervisory Signal Construction, 2) Intent Repre-
+sentation Learning, and 3) Predict Layer. In the first part, we first
+segment all training sequences into multiple subsequences by the
+𝐷𝑆(·) operation via Eq.(2). Then, we put all subsequences with
+the same target item into a set to construct intent supervisory
+signals. Next, we set up two auxiliary tasks for intent representa-
+tion learning: Coarse-grain Intent Contrastive Learning (CICL) and
+Fine-grain Intent Contrastive Learning (FICL). In the CICL task,
+for each subsequence, we randomly sample another subsequence
+from the set as its positive sample with the same target item. Then,
+we directly make the coarse-grain intent representation of the two
+subsequences in the latent space closer. In the FICL task, we first
+cluster the coarse-grain intent representations obtained from all
+subsequences and then make the coarse-grain intent representation
+closer to its intent prototype. In addition, we utilize the learned
+intent representation to predict the next item that the user may
+interact with. Finally, we jointly optimize these three objectives.
+2.3
+Supervisory Signal Construction
+To investigate the same subsequence patterns across user interac-
+tion sequences, we first split the original sequence into multiple
+subsequences via 𝐷𝑆(·) operation [36]. Specially, given a sequence
+𝑆𝑢= {𝑠𝑢
+1,𝑠𝑢
+2, ...,𝑠𝑢
+|𝑆𝑢|}, the operation can be formulated as follows:
+𝐷𝑆(𝑆𝑢) =
+
+
+{{𝑠𝑢
+1,𝑖𝑢
+2 }, · · · , {𝑠𝑢
+1,
+· · · ,𝑠𝑢
+|𝑆𝑢|−1,𝑖𝑢
+|𝑆𝑢|}}
+|𝑆𝑢| ≤𝑛+ 1
+{𝐷𝑆(𝑆𝑢
+𝑛+1), · · · ,
+{𝑠𝑢
+|𝑆𝑢|−𝑛, · · · ,𝑖𝑢
+|𝑆𝑢|}}
+|𝑆𝑢| > 𝑛+ 1.
+(2)
+549
+
+Intent Contrastive Learning with Cross Subsequences for Sequential Recommendation
+WSDM ’24, March 4–8, 2024, Merida, Mexico
+...
+query(·)
+h2
+h1
+c2
+c1
+Encoder
+S1
+S2
+K-means
+Encoder
+Encoder
+softmax
+i1
+i|I|
+...
+i2
+Predict Layer
+Intent Representation Learning
+share
+share
+intent prototype
+Sequences
+i1
+i|I|
+...
+i2
+target item
+DS(·)
+Supervisory Signal Construction
+i1
+i3
+i2
+i4
+i5
+i8
+i7
+i6
+i9
+i10
+sample
+c1
+ck-1
+ck
+Figure 2: The model architecture of ICSRec. Where 𝑆2 and 𝑆1 denote two subsequences with the same target item. h2 and h1
+denote two coarse-grain intentions obtained by encoder 𝑓𝜃(·). c2 and c1 denote two fine-grain intentions obtained via clustering.
+where 𝑛represents the max sequence length and 𝑖𝑢
+𝑘(1 ≤𝑘≤|𝑆𝑢|)
+represents the target item of the subsequence. After the segmen-
+tation operation on all training sequences, we put all obtained
+subsequences into different sets 𝑇= {𝑇1,𝑇2, ...,𝑇|𝐼|}, where 𝑇𝑎rep-
+resents the subsequence set with the target item 𝑖𝑎∈𝐼(1 ≤𝑎≤|𝐼|),
+to construct the coarse-grain intent supervisory signals.
+2.4
+Encoder
+Firstly, the whole item sets I are embedded into the same space [15,
+34] and generate the item embedding matrix M ∈R|I|×𝑑. Given the
+input sequence 𝑆𝑢, the embedding of the sequence 𝑆𝑢is initialized
+to e𝑢∈R𝑛×𝑑, which can formulated as follows:
+e𝑢= m𝑢+ p𝑢,
+(3)
+where m𝑢∈R𝑛×𝑑, represents the item’s embedding, p𝑢∈R𝑛×𝑑
+represents the position embedding and 𝑛represents the length of
+the sequence, respectively.
+Due to its superiority in modeling sequential tasks, we choose
+SASRec [15] as the backbone model, represented as 𝑓𝜃(·), which
+uses the Transformer [39] to learn the representation of the se-
+quence. Given the sequence embedding e𝑢, the output representa-
+tion H𝑢∈R𝑛×𝑑is calculated as:
+H𝑢= 𝑓𝜃(e𝑢).
+(4)
+where 𝜃represents the parameters of the sequential model. The
+last vector h𝑢𝑛∈R𝑑in H𝑢= [h𝑢
+1, ..., h𝑢𝑛] is chosen as the intent
+representation of the sequence.
+2.5
+Intent Representation Learning
+Coarse-grain Intent Contrastive Learning. Since different sub-
+sequences with the same target item may represent the same in-
+tention. Thus, we directly bring the intent representations of two
+subsequences with the same target item closer together in the latent
+space via contrastive learning. Given a subsequence 𝑆1 with the
+target item 𝑖𝑎, we first randomly sample a subsequence 𝑆2 from 𝑇𝑎,
+and then calculate the coarse-grain intent representations, h1 and
+h2, of two subsequences by Eq.(4), respectively. Then, we utilize
+contrast learning to bring two coarse-force intent representations
+closer to each other in the latent space. The contrastive loss can be
+formulated as follows:
+L𝑐𝑖𝑐𝑙= L𝑐𝑜𝑛(h1, h2),
+(5)
+and
+L𝑐𝑜𝑛(x1, x2) = −log
+𝑒𝑠(x1,x2)/𝜏
+𝑒𝑠(x1,x2)/𝜏+ Í
+x∉F
+𝑒𝑠(x1,x)/𝜏
+−log
+𝑒𝑠(x2,x1)/𝜏
+𝑒𝑠(x2,x1)/𝜏+ Í
+x∉F
+𝑒𝑠(x2,x)/𝜏.
+(6)
+where (x1, x2) represents a pair of positive sample’s embedding,
+𝑠(·) represents the inner product, 𝜏is the temperature parameter,
+and F is a set of negative samples that have the same label with two
+positive pairs in the mini-batch. Specially, we do not use InfoNCE [3,
+11] directly to calculate the contrastive loss, because treating other
+2(|B|-1) views within the same batch as negative samples may
+introduce false negative problems (e.g., there have more than one
+pair of subsequences that have the same target item in a mini-
+batch.), where |B| denotes the batch size. So we propose a simple
+550
+
+WSDM ’24, March 4–8, 2024, Merida, Mexico
+Xiuyuan Qin et al.
+strategy called False Negative Mask (FNM) to mask the effects by
+not contrasting them [5].
+Fine-grain Intent Contrastive Learning. Since the intention to
+buy the same item may fall into different categories in different
+contexts. Thus, we assume that there are 𝐾types of users’ inten-
+tions and that the intention to purchase the same item in different
+contexts can potentially belong to different types. We first put all
+subsequences into the encoder to obtain all the coarse-grain intent
+representations via Eq.( 4). Then we use all the obtained outputs for
+K-means clustering via faiss [14] and treat the center of the clusters
+as the fine-grain intent representation. The intention prototype we
+obtained is represented as C = {c𝑘}𝐾
+𝑘=1, where c𝑘∈R𝑑represents
+the 𝑘-th intention prototype. Then, we obtain the fine-grain intent
+representation of the two subsequences by 𝑞𝑢𝑒𝑟𝑦(·) operation. Spe-
+cially, we choose the nearest intention prototype c1 to h1 and c2 to
+h2, respectively, from the set C = {c𝑘}𝐾
+𝑘=1 as the fine-grain intent
+representation of h1 and h2, which is as follows:
+c1, c2 = 𝑞𝑢𝑒𝑟𝑦(h1, C),𝑞𝑢𝑒𝑟𝑦(h2, C).
+(7)
+To avoid introducing false negative problems (e.g., there have more
+than one pair of subsequences that have the same fine-grain intent
+representation in a mini-batch.). We use Eq.( 6) to calculate the
+contrastive loss as follows:
+L𝑓𝑖𝑐𝑙= L𝑐𝑜𝑛(h1, c1) + L𝑐𝑜𝑛(h2, c2).
+(8)
+2.6
+Prediction Layer
+In SR, the prediction of the next item can be viewed as a classi-
+fication task based on the set of all items. Therefore, we use the
+learned intent representation to calculate the probability of the
+next item that the user may interact with. Given the learned intent
+representation h𝑢∈R𝑑and the item embedding matrix M, the
+Eq.(1) is equivalent to minimizing the cross-entropy loss as follows:
+L𝑅𝑒𝑐= −1 ∗ˆy[𝑔] + log(
+𝐼∑︁
+𝑖
+exp(ˆy[𝑖]))),
+(9)
+and
+ˆy = 𝑠𝑜𝑓𝑡𝑚𝑎𝑥(h𝑢M𝑇).
+(10)
+where ˆy ∈R|𝐼| represents the predictive score of all items, and
+𝑔∈𝐼represents the ground-truth of the sequence.
+2.7
+Multi Task Learning
+We use a multi-task learning paradigm to jointly optimize the main
+sequential prediction task and the other two auxiliary learning
+objectives. In which Eq.(9) is to optimize the main next item predict
+task, Eq.(5) is to optimize the CICL task, and Eq.(8) is to optimize
+the FICL task. The final training loss function is as follows:
+L = L𝑅𝑒𝑐+ 𝜆· L𝑐𝑖𝑐𝑙+ 𝛽· L𝑓𝑖𝑐𝑙.
+(11)
+where 𝜆and 𝛽are hyper-parameters that need to be tuned.
+3
+EXPERIMENTS
+In this section, we present our experimental setup and empirical
+results. Our experiments are designed to investigate the following
+research questions(RQs):
+Dataset
+Sports
+Beauty
+Toys
+ML-1M
+# Users
+35,598
+22,363
+19,412
+6,040
+# Items
+18,357
+12,101
+11,924
+3,416
+# Actions
+296,337
+198,502
+167,597
+999,611
+# Avg. Actions/User
+8.3
+8.8
+8.6
+165.4
+# Avg. Actions/Item
+16.1
+16.4
+14
+292.6
+Sparsity
+99.95%
+99.93%
+99.93%
+95.16%
+Table 1: Statistics of the experimented datasets.
+• RQ1: How does ICSRec perform compared to the State-Of-The-
+Art (SOTA) SR models?
+• RQ2: How effective are the key model components (e.g., intent
+representation learning, FNM) in ICSRec?
+• RQ3: How does the robustness (e.g., hyper-parameters sensitivity,
+against noise interactions) of ICSRec?
+3.1
+Experimental Settings
+Datasets. We evaluate the effectiveness of our proposed model on
+four datasets from two real-world applications:
+• Amazon2: A series of datasets that collect user reviews on prod-
+ucts from 𝐴𝑚𝑎𝑧𝑜𝑛.𝑐𝑜𝑚. The dataset can be divided into many
+subsets according to the various product categories, which have
+relatively short sequence lengths. In this paper, we pick Sports,
+Beauty, and Toys as three different experimental datasets from
+the Amazon dataset.
+• MovieLens3: It contains users’ behavior logs on movies, which
+have very long sequences. We pick the version MovieLens-1M
+(ML-1M), which includes 1 million user ratings, as an experi-
+mental dataset.
+To ensure the data quality, users or items appearing less than five
+times are removed [15, 34]. For all datasets, we aggregate each
+user’s interaction records and sort them by the action timestamps
+in chronological order. For evaluation purposes, we follow [5, 29]
+to split the data into training, validation, and testing datasets based
+on timestamps given in the datasets. Specifically, the last item is
+used as the label for testing, the second-to-last item is used as the
+label for validating, and the others for training. Table 1 presents
+the detailed statistics of the four datasets.
+Baseline Models. We compare ICSRec with the following repre-
+sentative SR models:
+• Non-sequential model: BPR [30] first employs Bayesian Per-
+sonalized Ranking (BPR) loss to optimize the matrix factorization
+model.
+• General sequential models: GRU4Rec [13] introduces a Gated
+Recurrent Unit (GRU) to model sequences and first leverages
+Recurrent Neural Networks (RNN) for SR. Caser [37] first in-
+troduces Convolutional Neural Network (CNN) to SR, which
+leverages both horizontal and vertical convolution to model the
+sequence. SASRec [15] first utilizes the attention mechanism to
+model sequences, which greatly improves the performance of SR.
+• SSL-based sequential models: BERT4Rec [34] first introduces
+BERT [6] to model the sequence, which leverages MIP (Mask Item
+2http://jmcauley.ucsd.edu/data/amazon/
+3https://grouplens.org/datasets/movielens/1m/
+551
+
+Intent Contrastive Learning with Cross Subsequences for Sequential Recommendation
+WSDM ’24, March 4–8, 2024, Merida, Mexico
+Table 2: Performance comparisons of different methods. The results of the best baseline are underlined in each row. The last
+column is the relative improvements compared with the best baseline results.
+DataSet
+Metric
+BPR
+GRU4Rec
+Caser
+SASRec
+BERT4Rec
+S3-RecMIP
+CL4SRec
+CoSeRec
+DuoRec
+DSSRec
+SINE
+ICLRec
+IOCRec
+ICSRec
+impro.
+Sports
+HR@5
+0.0123
+0.0162
+0.0154
+0.0214
+0.0217
+0.0121
+0.0231
+0.0290
+0.0312
+0.0209
+0.0240
+0.0290
+0.0293
+0.0403
+29.17%
+HR@10
+0.0215
+0.0258
+0.0261
+0.0333
+0.0359
+0.0205
+0.0369
+0.0439
+0.0466
+0.0328
+0.0389
+0.0437
+0.0452
+0.0565
+21.24%
+HR@20
+0.0369
+0.0421
+0.0399
+0.0500
+0.0604
+0.0344
+0.0557
+0.0636
+0.0696
+0.0499
+0.0610
+0.0646
+0.0684
+0.0794
+14.10 %
+NDCG@5
+0.0076
+0.0103
+0.0114
+0.0144
+0.0143
+0.0084
+0.0146
+0.0196
+0.0195
+0.0139
+0.0152
+0.0191
+0.0169
+0.0283
+44.39 %
+NDCG@10
+0.0105
+0.0142
+0.0135
+0.0177
+0.0190
+0.0111
+0.0191
+0.0244
+0.0244
+0.0178
+0.0199
+0.0238
+0.0220
+0.0335
+37.30%
+NDCG@20
+0.0144
+0.0186
+0.0178
+0.0218
+0.0251
+0.0146
+0.0238
+0.0293
+0.0302
+0.0221
+0.0255
+0.0291
+0.0279
+0.0393
+30.13%
+Beauty
+HR@5
+0.0178
+0.0180
+0.0251
+0.0377
+0.0360
+0.0189
+0.0401
+0.0504
+0.0561
+0.0408
+0.0354
+0.0500
+0.0511
+0.0698
+24.42%
+HR@10
+0.0296
+0.0284
+0.0342
+0.0624
+0.0601
+0.0307
+0.0642
+0.0725
+0.0851
+0.0616
+0.0612
+0.0744
+0.0774
+0.0960
+12.81%
+HR@20
+0.0474
+0.0478
+0.0643
+0.0894
+0.0984
+0.0487
+0.0974
+0.1034
+0.1228
+0.0894
+0.0963
+0.1058
+0.1146
+0.1298
+5.70%
+NDCG@5
+0.0109
+0.0116
+0.0145
+0.0241
+0.0216
+0.0115
+0.0268
+0.0339
+0.0348
+0.0263
+0.0213
+0.0326
+0.0311
+0.0494
+41.95%
+NDCG@10
+0.0147
+0.0150
+0.0226
+0.0342
+0.0300
+0.0153
+0.0345
+0.0410
+0.0441
+0.0329
+0.0296
+0.0403
+0.0396
+0.0579
+31.29%
+NDCG@20
+0.0192
+0.0186
+0.0298
+0.0386
+0.0391
+0.0198
+0.0428
+0.0487
+0.0536
+0.0399
+0.0384
+0.0483
+0.0490
+0.0663
+23.69%
+Toys
+HR@5
+0.0122
+0.0121
+0.0205
+0.0429
+0.0371
+0.0456
+0.0503
+0.0533
+0.0655
+0.0447
+0.0385
+0.0597
+0.0542
+0.0788
+20.30%
+HR@10
+0.0197
+0.0184
+0.0333
+0.0652
+0.0524
+0.0689
+0.0736
+0.0755
+0.0959
+0.0671
+0.0631
+0.0834
+0.0804
+0.1055
+10.01%
+HR@20
+0.0327
+0.0290
+0.0542
+0.0957
+0.0760
+0.0940
+0.0990
+0.1037
+0.1293
+0.0942
+0.0957
+0.1139
+0.1132
+0.1368
+5.80%
+NDCG@5
+0.0076
+0.0077
+0.0125
+0.0245
+0.0259
+0.0314
+0.0264
+0.0370
+0.0392
+0.0297
+0.0225
+0.0404
+0.0297
+0.0571
+41.34%
+NDCG@10
+0.0100
+0.0097
+0.0168
+0.0320
+0.0309
+0.0388
+0.0339
+0.0442
+0.0490
+0.0369
+0.0304
+0.0480
+0.0381
+0.0657
+34.08%
+NDCG@20
+0.0132
+0.0123
+0.0221
+0.0397
+0.0368
+0.0452
+0.0404
+0.0513
+0.0574
+0.0437
+0.0386
+0.0557
+0.0464
+0.0736
+28.22%
+ML-1M
+HR@5
+0.0247
+0.0806
+0.0912
+0.1078
+0.1308
+0.1078
+0.1142
+0.1128
+0.2098
+0.1371
+0.0990
+0.1382
+0.1796
+0.2445
+16.54%
+HR@10
+0.0412
+0.1344
+0.1442
+0.1810
+0.2219
+0.1952
+0.1815
+0.1861
+0.3078
+0.2243
+0.1694
+0.2273
+0.2689
+0.3368
+9.42%
+HR@20
+0.0750
+0.2081
+0.2228
+0.2745
+0.3354
+0.3114
+0.2818
+0.2950
+0.4098
+0.3275
+0.2705
+0.3368
+0.3831
+0.4518
+10.25%
+NDCG@5
+0.0159
+0.0475
+0.0565
+0.0681
+0.0804
+0.0616
+0.0705
+0.0692
+0.1433
+0.0898
+0.0586
+0.0889
+0.1201
+0.1710
+19.33%
+NDCG@10
+0.0212
+0.0649
+0.0734
+0.0948
+0.1097
+0.0917
+0.0920
+0.0915
+0.1749
+0.1179
+0.0812
+0.1175
+0.1487
+0.2007
+14.75%
+NDCG@20
+0.0297
+0.0834
+0.0931
+0.1156
+0.1384
+0.1204
+0.1170
+0.1247
+0.2007
+0.1440
+0.1066
+0.1450
+0.1775
+0.2297
+14.45%
+Table 3: The HR@20 and NDCG@20 performances achieved
+by ICSRec variants and SASRec on four datasets.
+Model
+Dataset
+Sports
+Beauty
+Toys
+ML-1M
+HR
+NDCG
+HR
+NDCG
+HR
+NDCG
+HR
+NDCG
+(A) ICSRec
+0.0794
+0.0393
+0.1298
+0.0663
+0.1368
+0.0736
+0.4518
+0.2297
+(B) w/o CICL
+0.0754
+0.0374
+0.1268
+0.0627
+0.1293
+0.0701
+0.4468
+0.2174
+(C) w/o FICL
+0.0746
+0.0368
+0.1252
+0.0616
+0.1346
+0.0716
+0.4455
+0.2162
+(D) w/o FNM
+0.0786
+0.0384
+0.1290
+0.0658
+0.1336
+0.0718
+0.4315
+0.2157
+(E) SASRec
+0.0500
+0.0218
+0.0894
+0.0386
+0.0957
+0.0397
+0.2745
+0.1156
+Predict) task to capture the potential relationships between items
+and sequences. S3-RecMIP [51] first introduces self-supervised
+learning to capture the potential relationships between items.
+And since we have no attribute information, only the MIP task,
+called S3-RecMIP, is used for training. CL4SRec [47] first inte-
+grates data augmentation and contrastive learning to SR, which
+further improves the robustness of the model to noise and spar-
+sity CoSeRec [23] further improves CL4SRec by introducing
+two more robust data augmentation. DuoRec [29] introduces a
+model augmentation method and a supervised sampling strategy
+for the first time.
+• Intent-guided sequential models: DSSRec [26] first intro-
+duces a novel seq2seq training strategy and an intention-disentan-
+glement layer for SR. SINE [35] designs an adaptive interest
+aggregation module to model users’ multiple interests for SR.
+0.1
+0.2
+0.3
+0.4
+0.5
+(a) λ
+0.025
+0.040
+0.055
+0.070
+0.175
+0.190
+0.205
+0.220
+ML-1M
+Toys
+Beauty
+Sports
+0.1
+0.2
+0.3
+0.4
+0.5
+(b) β
+0.025
+0.040
+0.055
+0.070
+0.175
+0.190
+0.205
+0.220
+ML-1M
+Toys
+Beauty
+Sports
+0.1
+0.2
+0.3
+0.4
+0.5
+(c) Dropout Rate
+0.025
+0.040
+0.055
+0.070
+0.175
+0.190
+0.205
+0.220
+ML-1M
+Toys
+Beauty
+Sports
+64
+128
+256
+512
+1024
+(d) K
+0.025
+0.040
+0.055
+0.070
+0.175
+0.190
+0.205
+0.220
+ML-1M
+Toys
+Beauty
+Sports
+Figure 3: Performances of ICSRec w.r.t. different hyper-
+parameters (𝜆, 𝛽, dropout rate and 𝐾). on NDCG@20.
+ICLRec [5] learns users’ latent intents from the behavior se-
+quences via clustering and integrates the learned intents into the
+model via an auxiliary contrastive loss. IOCRec [21] first intro-
+duces intent-level contrastive learning for denoising problems of
+the SR task.
+Evaluation Metrics. We follow [17, 42] to rank the whole item
+set without negative sampling and use two widely-used evaluation
+metrics to evaluate the model, including Hit Ratio @𝑘(HR@𝑘) and
+552
+
+WSDM ’24, March 4–8, 2024, Merida, Mexico
+Xiuyuan Qin et al.
+0
+5
+10
+15
+20
+Noise Ratio (%) on Sports
+0.01
+0.02
+0.03
+0.04
+SASRec
+IOCRec
+DuoRec
+ICSRec
+0
+5
+10
+15
+20
+Noise Ratio (%) on Beauty
+0.03
+0.04
+0.05
+0.06
+0.07
+SASRec
+IOCRec
+DuoRec
+ICSRec
+0
+5
+10
+15
+20
+Noise Ratio (%) on Toys
+0.03
+0.04
+0.05
+0.06
+0.07
+0.08
+SASRec
+IOCRec
+DuoRec
+ICSRec
+0
+5
+10
+15
+20
+Noise Ratio (%) on ML-1M
+0.09
+0.14
+0.19
+0.24
+SASRec
+IOCRec
+DuoRec
+ICSRec
+Figure 4: Performance comparison w.r.t. noise ratio on four
+datasets. The bar chart shows the performance in NDCG@20.
+Normalized Discounted Cumulative Gain @𝑘(NDCG@𝑘) where
+𝑘∈{5, 10, 20}.
+Implementation Details. The implementations of Caser, S3-Rec,
+BERT4Rec, CoSeRec, ICLRec, DuoRec, and IOCRec are provided
+by the authors. BPR, GRU4Rec, SASRec, CL4SRec, DSSRec, and
+SINE are implemented based on public resources. All parameters in
+these methods are used as reported in their papers and the optimal
+settings are chosen based on the model performance on validation
+data. For ICSRec, the number of the self-attention blocks and atten-
+tion heads is set as 2. The batch size is set to 256. We set 𝑑as 64, 𝑛as
+50, 𝜏as 1.0. 𝜆and 𝛽are selected from {0.1, 0.2, 0.3, 0.4, 0.5}. We use
+Adam [16] as the optimizer and set the learning rate to 10−3. The
+number of clusters is set in the range of {64, 128, 256, 512, 1024} and
+the dropout rate in a range of {0.1, 0.2, 0.3, 0.4, 0.5}. We train the
+model with an early stopping strategy based on the performance of
+validation data. All experiments are implied on NVIDIA GeForce
+RTX 2080 Ti GPU.
+3.2
+Performance Comparison (RQ1)
+We compare the performance of all baselines with ICSRec. Table 2
+shows the experimental results of all the compared models on four
+datasets, and the following findings can be seen through it:
+• Models based on the attention mechanism are better than models
+based on other networks, such as GRU4Rec and Caser, which
+demonstrates the superiority of the attention mechanism in mod-
+eling sequential tasks. In addition, the self-supervised based mod-
+els perform more effectively than classical models, such as SAS-
+Rec. Among them, different from BERT4Rec and S3-RecMIP that
+use MIP tasks to train the model, CL4SRec, CoSeRec, and DuoRec
+utilize data augmentation and Contrastive Learning (CL) for train-
+ing, which leads to generally better results than BERT4Rec and
+S3-RecMIP. That indicates the CL paradigm may generate more
+Table 4: The HR@20 and NDCG@20 performances of
+GRU4Rec, SASRec, and ICSRec with different sequence en-
+coders.
+Model
+Dataset
+Sports
+Beauty
+Toys
+ML-1M
+HR
+NDCG
+HR
+NDCG
+HR
+NDCG
+HR
+NDCG
+(A) GRU4Rec
+0.0421
+0.0186
+0.0478
+0.0186
+0.0290
+0.0123
+0.2081
+0.0834
+(B) ICSRec𝐺𝑅𝑈
+0.0595
+0.0280
+0.1014
+0.0506
+0.0950
+0.0510
+0.4045
+0.1964
+(C) SASRec
+0.0500
+0.0218
+0.0894
+0.0386
+0.0957
+0.0397
+0.2745
+0.1156
+(D) ICSRec𝑆𝐴𝑆
+0.0794
+0.0393
+0.1298
+0.0663
+0.1368
+0.0736
+0.4518
+0.2297
+expressive embeddings for users and items by maximizing the
+mutual information.
+• The intent-based models perform better than most self-supervised
+models, such as BERT4Rec, S3-RecMIP, and CL4SRec. Among
+them, ICLRec and IOCRec achieve better results in this group.
+Different from DSSRec and SINE, ICLRec and IOCRec utilize a
+contrastive SSL task to learn the intent representation for SR,
+and thus improve the performance by a large margin. But they
+are not as effective as DuoRec, probably because introducing sto-
+chastic data augmentation destroys the intention of the original
+sequences and thus reduces the performance [10]. That motivates
+us to further investigate how to better combine CL and intent
+modeling for SR.
+• Benefiting from introducing intent supervisory signal for intent
+representation learning, ICSRec significantly outperforms other
+methods on all metrics across the different datasets. For instance,
+ICSRec improves over the best baseline result w.r.t. NDCG by
+23.69-44.39% and 14.45-19.33% on three sparse datasets and the
+dense dataset ML-1M, respectively. The reason may be that the
+user’s interaction sequences are longer in dense dataset ML-1M,
+which makes the users’ intentions more diverse and less easy to
+distinguish.
+3.3
+Ablation Study (RQ2)
+To analyze the effectiveness of each component of our model, we
+conduct several ablation experiments about ICSRec, where w/o
+denotes without. (A) denotes ICSRec, (B) removes the coarse-grain
+intent learning module by setting 𝜆to 0 in Eq.(11), (C) removes
+the fine-grain intent learning module by setting 𝛽to 0 in Eq.(11),
+and (D) removes the false negative mask component in Eq.(6). (E)
+denotes the base encoder SASRec [15].
+Tabel 3 summarizes HR@20 and NDCG@20 performances of
+ICSRec variants and SASRec on four datasets. From the table, we
+can find that ICSRec achieves the best results on all datasets, which
+indicates all components are effective for our framework. By com-
+paring (A) with (B) and (C), we find that CICL and FICL could
+significantly improve the model accuracy, which is consistent with
+our statements. By comparing (B) and (C), it can be observed that
+FICL is more efficient than CICL. By comparing (A) and (D), we can
+find that the mask of the false negative sample could improve the
+performance. By comparing (A) and (E), we can find that ICSRec
+outperforms the backbone model SASRec on four datasets. This
+indicates that leveraging the intent supervisory signals, obtained
+553
+
+Intent Contrastive Learning with Cross Subsequences for Sequential Recommendation
+WSDM ’24, March 4–8, 2024, Merida, Mexico
+User1
+{185, T}
+{3307, D&Co}
+{1287, D&A}
+{2283, D}
+{1363, D}
+{1252, T}
+{1276, D&Co}
+{3007, Do}
+{627, D&T}
+{3791, D}
+{ 2579, D}
+User2
+{3889, A}
+{1991, H}
+{3525, Co}
+{2335, Co}
+{2920, D}
+{265, D}
+{3773, Co}
+{381, D}
+{3246, D}
+{3028, Co}
+User3
+{546, A&C}
+{1431, A&Co}
+{2412, A&D}
+{2153, A}
+{694, A}
+{3113, A&T}
+{1497, A}
+{1772, A&Co}
+{2487, A&Co}
+{2568, A}
+{2720, A&C}
+User4
+{2142, C&Co}
+{2162, C}
+{126, C}
+{546, C&A}
+{631, C&M}
+{87, C&Co}
+{1702, C&Co}
+{575, C&Co}
+{3054, C}
+{1822, C&Co}
+Table 5: The case study explains the motivation of our proposed model. The digit means the movie id from the ML-1M datasets.
+The capital letter means the film genre (A: Action; Co: Comedy; C: Children; D: Drama; T: Thriller; M: Musical; Do: Documentary;
+H: Horror). User1 and User2, User3 and User4 have the same target movie.
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+User1
+T
+D&Co
+D&A
+D
+D
+T
+D&Co
+Do
+D&T
+D
+0.9 0.7 0.7 0.7 0.6 0.1 0.0 0.4 0.7 0.7
+0.7 1.0 0.7 0.6 0.6 0.2 0.3 0.5 0.6 0.6
+0.7 0.7 0.9 0.7 0.6 0.5 0.4 0.6 0.6 0.5
+0.7 0.6 0.7 0.8 0.6 0.2 0.1 0.5 0.6 0.6
+0.6 0.6 0.6 0.6 0.8 0.2 0.1 0.4 0.6 0.5
+0.1 0.2 0.5 0.2 0.2 1.0 0.6 0.6 0.2 0.0
+0.0 0.3 0.4 0.1 0.1 0.6 0.9 0.5 0.1 0.0
+0.4 0.5 0.6 0.5 0.4 0.6 0.5 0.9 0.5 0.3
+0.7 0.6 0.6 0.6 0.6 0.2 0.1 0.5 0.8 0.7
+0.7 0.6 0.5 0.6 0.5 0.0 0.0 0.3 0.7 0.9
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+User2
+A
+H
+Co
+Co
+D
+D
+Co
+D
+D
+Co
+0.9 0.4 0.4 0.3 0.2 0.1 0.0 0.3 0.2 0.1
+0.4 1.0 0.4 0.3 0.3 0.1 0.2 0.2 0.5 0.1
+0.4 0.4 0.9 0.3 0.3 0.0 0.1 0.2 0.2 0.2
+0.3 0.3 0.3 0.8 0.0 0.0 0.3 0.2 0.3 0.3
+0.2 0.3 0.3 0.0 0.8 0.1 0.0 0.3 0.2 0.2
+0.1 0.1 0.0 0.0 0.1 0.7 0.2 0.1 0.2 0.1
+0.0 0.2 0.1 0.3 0.0 0.2 0.9 0.1 0.4 0.3
+0.3 0.2 0.2 0.2 0.3 0.1 0.1 0.9 0.5 0.2
+0.2 0.5 0.2 0.3 0.2 0.2 0.4 0.5 0.8 0.5
+0.1 0.1 0.2 0.3 0.2 0.1 0.3 0.2 0.5 0.8
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+User3
+A&C
+A&Co
+A&D
+A
+A
+A&T
+A
+A&Co
+A&Co
+A
+0.8 0.7 0.7 0.6 0.6 0.4 0.6 0.5 0.4 0.3
+0.7 0.8 0.6 0.4 0.4 0.3 0.4 0.3 0.4 0.0
+0.7 0.6 0.9 0.7 0.7 0.5 0.8 0.5 0.6 0.3
+0.6 0.4 0.7 0.9 0.8 0.6 0.7 0.5 0.4 0.3
+0.6 0.4 0.7 0.8 0.7 0.6 0.7 0.4 0.5 0.2
+0.4 0.3 0.5 0.6 0.6 0.7 0.6 0.4 0.5 0.2
+0.6 0.4 0.8 0.7 0.7 0.6 0.8 0.5 0.6 0.3
+0.5 0.3 0.5 0.5 0.4 0.4 0.5 0.8 0.3 0.7
+0.4 0.4 0.6 0.4 0.5 0.5 0.6 0.3 1.0 0.0
+0.3 0.0 0.3 0.3 0.2 0.2 0.3 0.7 0.0 1.0
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+User4
+C&Co
+C
+C
+C&A
+C&M
+C&Co
+C&Co
+C&Co
+C
+C&Co
+0.6 0.3 0.3 0.0 0.2 0.1 0.2 0.0 0.1 0.0
+0.3 1.0 0.8 0.8 0.8 0.9 0.9 0.5 0.6 0.7
+0.3 0.8 0.9 0.7 0.7 0.8 0.9 0.4 0.3 0.5
+0.0 0.8 0.7 1.0 0.8 0.9 0.8 0.6 0.6 0.8
+0.2 0.8 0.7 0.8 0.9 0.8 0.8 0.5 0.6 0.7
+0.1 0.9 0.8 0.9 0.8 1.0 0.9 0.7 0.6 0.8
+0.2 0.9 0.9 0.8 0.8 0.9 1.0 0.6 0.4 0.7
+0.0 0.5 0.4 0.6 0.5 0.7 0.6 0.9 0.6 0.7
+0.1 0.6 0.3 0.6 0.6 0.6 0.4 0.6 0.9 0.7
+0.0 0.7 0.5 0.8 0.7 0.8 0.7 0.7 0.7 0.9
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Figure 5: Visualization of the intents heat map for four users.
+from cross subsequences, for intent representation learning can
+help improve SR performance.
+3.4
+Further Analysis (RQ3)
+We conduct various experiments on four datasets to verify the
+robustness of ICSRec. For all models in the following experiments,
+we only change one variable at one time while keeping other hyper-
+parameters optimal.
+Impact of L𝑐𝑖𝑐𝑙and L𝑓𝑖𝑐𝑙weights. The final loss function of
+ICSRec in Eq.(11) is a multi-task learning loss. Figure 3(a) and (b)
+shows the effect of assigning different weights to 𝜆and 𝛽on the
+model, respectively. We observe that the performance of ICSRec
+gets peak value to different 𝛽and 𝜆, which demonstrates the effec-
+tiveness of the proposed framework and manifests that introducing
+suitable weights can boost the performance of recommendation.
+From these figures, 𝛽= 0.1 and 𝜆= 0.3 for Sports, 𝛽= 0.1 and
+𝜆= 0.3 for Beauty, 𝛽= 0.1 and 𝜆= 0.2 for Toys, and 𝛽= 0.1 and
+𝜆= 0.1 for ML-1M are generally proper to ICSRec. The weight of
+L𝑐𝑖𝑐𝑙, i.e., 𝜆, is commonly larger than 𝛽, which demonstrates that
+CICL gains more importance than FICL.
+Impact of the dropout rate. The dropout can be seen as a regular-
+ization technique to mitigate model overfitting, and the magnitude
+of its value is closely related to the data [33, 43]. From Figure 3(c),
+dropout rate=0.5 for three sparse datasets and dropout rate=0.1 for
+the ML-1M dataset are generally proper to ICSRec. The reason may
+be that the ML-1M dataset contains longer sequences and the loss
+of more neurons affects the modeling of user intention.
+Impact of the cluster number 𝐾. Figure 3(d) shows the effect
+of different numbers of intention prototype clusters on the model.
+This figure shows that the number of users’ intentions in different
+datasets is different, which shows the diversity of users’ intentions.
+In addition, 𝐾=256 for Sports, 𝐾=256 for Beauty, 𝐾=1024 for Toys,
+and 𝐾=512 for ML-1M are generally proper to ICSRec.
+Robustness to Noise Data. To verify the robustness of ICSRec
+against noise interactions, we randomly add a certain proportion(i.e,
+5%, 10%, 15%, 20%) of negative items into the input sequences dur-
+ing testing, and examine the final performance of ICSRec and other
+baselines. From Figure 4 we can see that adding noise data deterio-
+rates the performances of four models. By comparing SASRec and
+other models, it can be seen that adding a contrastive auxiliary task
+can significantly improve the model’s robustness. By comparing
+ICSRec and other models, it can be seen that our model performs
+better than other models. Especially, with 10% noise proportion,
+our model can even outperform other models without noise dataset
+on four datasets. The reason might be that ICSRec leverages con-
+trastive learning to model intentions more accurately from cross
+subsequences, thus increasing the robustness. By looking at the
+performance of the four models on sparse datasets (sports, beauty,
+and toys), it can be seen that SASRec and DuoRec are much lower
+than the intent-based models IOCRec and ICSRec when the propor-
+tion of noise data is 20. This shows the robustness of the model can
+be improved by leveraging the user’s intention on sparse datasets.
+In addition, comparing the performances of the four models on the
+dense dataset ml-1m, we can see that IOCRec performs less robustly
+than DuoRec on ML-1M, probably because users’ intentions are
+more diverse in dense datasets, and IOCRec introduces stochastic
+data augmentation to model the intention, which may destroy the
+user’s original intentions [10].
+Impacts of encoder 𝑓𝜃(·). To further investigate the effectiveness
+of our proposed methods, we use other models, such GRU4Rec, as
+the backbone encoder. Specially, we consider the following settings
+of ICSRec as the backbone encoder for experiments: (B) ICSRec𝐺𝑅𝑈:
+we use the GRU4Rec [13] as the backbone encoder, (D) ICSRec𝑆𝐴𝑆:
+the default model that uses SASRec [15] as the backbone encoder.
+Table 4 shows the performance of ICSRec with different encoders,
+as well as the performance of backbone models. It can be seen that
+(B) and (D) outperform the respective backbone encoder models.
+This indicates that the intent representation learning module is a
+general module that can help improve the performance of existing
+SR methods. Comparing (A) and (C), (B) and (D), we can find that
+554
+
+WSDM ’24, March 4–8, 2024, Merida, Mexico
+Xiuyuan Qin et al.
+the encoder dominates the performance of ICSRec, and the intent
+representation learning module is a complementary part that can
+help further improve the performance.
+4
+RELATED WORK
+4.1
+Sequential Recommendation
+Sequential recommendation (SR) aims to predict successive pref-
+erences according to one’s historical interactions, which has been
+heavily researched in academia and industry [9, 40]. Classical FPM-
+C [31] fuses both sequential patterns and users’ general interests.
+FOSSIL [12] improves the robustness against sparse data by com-
+bining similarity-based methods and high-order Markov Chains.
+With the recent advancements in deep learning, many SR models
+are gradually being combined with neural networks [2, 44]. Such
+as Recurrent Neural Networks (RNN) based [13, 44] and Convolu-
+tional Neural Networks (CNN) based [37]. The recent success of
+Transformer [39] advances the development of SR. SASRec [15] first
+utilizes a transformer to model the users’ ordered historical inter-
+actions, which has made an immense success. LSAN [22] devises a
+temporal context-aware embedding and proposes a twine-attention
+sequential framework. STOSA [8] introduces stochastic embed-
+dings and proposes a Wasserstein Self-Attention in SR. However,
+these models are commonly limited by sparse and noisy problems.
+4.2
+Self-supervised Learning for Sequential
+Recommendation
+Motivated by the immense success of Self-Supervised Learning
+(SSL) in the field of Natural Language Process (NLP) [6] and Com-
+puter Vision (CV) [7] and its effectiveness in solving data sparsity
+problems, a growing number of works are now applying SSL to rec-
+ommendation. BERT4Rec [34] leverages pre-trained BERT to gen-
+erate the representation of the target item from the user’s historical
+interactions. S3-Rec [51] utilizes four auxiliary self-supervised tasks
+to capture the sequential information by maximizing the mutual in-
+formation of different views. More interesting works [23, 27, 29, 47]
+introduce Contrastive Learning (CL), which leverages the informa-
+tion from augmented views to boost the effectiveness of learned
+representations [48], into SR to alleviate the noise and sparse prob-
+lems. MMInfoRec [28] applies an end-to-end contrastive learning
+scheme for feature-based SR. CL4SRec [47] learns the represen-
+tations of users by maximizing the agreement between different
+augmented views of the same user’s chronological interactions
+and optimizing the contrastive loss with the main task simultane-
+ously. CoSeRec [23] further improves CL4SRec by introducing two
+more robust data augmentation methods for generating contrastive
+pairs. More prior works [45, 46, 52] also explore the application
+of SSL to graph-based recommendation. SGL [45] generates two
+augmented views with graph augmentation and optimizes the node-
+level contrastive loss. GCA [52] explores adaptive topology-level
+and node-attribute-level augmentation operations for generating
+high-quality contrastive views. Different from constructing views
+by adopting data augmentation, DuoRec [29] chooses to construct
+view pairs with model augmentation, which could maintain the
+sequential correlations in the process of training. However, these
+augmentation operations are all hand-crafted and may change the
+original intention behind the sequence.
+4.3
+Intent-guided Recommender Systems
+Many recent approaches have turned their attention to studying
+users’ intentions to improve the performance and robustness of rec-
+ommender systems [2, 4, 18, 19, 41]. Some exciting works [2, 20, 38]
+construct a complementary task for learning the user’s intentions
+by introducing auxiliary information (e.g., predicting the next item’s
+category, predicting the user’s next action type, etc.). Since such
+information may not always be available or truly express the user’s
+intentions, some interesting works have been proposed to model
+users’ intents in the latent space [5]. DSSRec [26] leverages a
+seq2seq training strategy to extract supervision signals from multi-
+ple future interactions and introduces an intent variable to capture
+mutual information between a user’s historical and future behavior
+sequences. SINE [35] proposes a sparse interest extraction module
+to infer the interacted intentions of a user from a large pool of inten-
+tion groups. ICLRec [5] extracts users’ intent distributions from all
+user behavior sequences via clustering and integrates the learned
+intent into the SR model via a contrastive SSL loss. IOCRec [21]
+improves ICLRec by introducing two new modules, global and local
+modules, for modeling intentions, and it leverages these two mod-
+ules to alleviate the noise problem of the contrastive learning task.
+MITGNN [24] proposes a multi-intent translation graph neural
+network to mine users’ multiple intents by considering the correla-
+tions of the intents. However, these methods all ignore the intent
+supervisory signals hidden in the user interaction sequence [50].
+In addition, introducing stochastic data augmentation into intent
+modeling may change the original intent hidden in the interaction
+sequence [10]. Instead, our method extracts supervisory signals
+from users’ interactions and leverages Contrastive Learning (CL)
+to learn users’ intentions.
+5
+CONCLUSION
+In this paper, we propose a novel contrastive learning based se-
+quential recommendation system called ICSRec. ICSRec extracts
+coarse-grain intent supervisory signals from all users’ historical
+interaction sequences and then utilizes these intent supervisory
+signals to construct two auxiliary learning objectives for intent
+representation learning. This approach helps alleviate the spar-
+sity problem of interaction data and presents more suitable items
+for users with different intentions. Finally, the outstanding per-
+formance of our model on four real-world datasets demonstrates
+our mentioned model’s superiority over other methods. Extensive
+experiments show that IOCRec achieves state-of-the-art perfor-
+mance against a series of SOTA solutions. For future work, we
+would like to develop novel auxiliary learning objects for improv-
+ing the performance of ICSRec. Moreover, we are also interested in
+applying ICSRec to improve the performance of other sequential
+recommendation models.
+6
+ACKNOWLEDGMENTS
+This research was partially supported by the NSFC (62376180,
+62176175), the major project of natural science research in Uni-
+versities of Jiangsu Province (21KJA520004), Suzhou Science and
+Technology Development Program(SYG202328) and the Priority
+Academic Program Development of Jiangsu Higher Education In-
+stitutions.
+555
+
+Intent Contrastive Learning with Cross Subsequences for Sequential Recommendation
+WSDM ’24, March 4–8, 2024, Merida, Mexico
+REFERENCES
+[1] Gediminas Adomavicius and Alexander Tuzhilin. 2005. Toward the Next Gener-
+ation of Recommender Systems: A Survey of the State-of-the-Art and Possible
+Extensions. TKDE 17, 6 (2005), 734–749.
+[2] Renqin Cai, Jibang Wu, Aidan San, Chong Wang, and Hongning Wang. 2021.
+Category-aware Collaborative Sequential Recommendation. In SIGIR. 388–397.
+[3] Ting Chen, Simon Kornblith, Mohammad Norouzi, and Geoffrey E. Hinton. 2020.
+A Simple Framework for Contrastive Learning of Visual Representations. In
+ICML. 1597–1607.
+[4] Wanyu Chen, Pengjie Ren, Fei Cai, Fei Sun, and Maarten de Rijke. 2020. Improving
+End-to-End Sequential Recommendations with Intent-aware Diversification. In
+CIKM. 175–184.
+[5] Yongjun Chen, Zhiwei Liu, Jia Li, Julian J. McAuley, and Caiming Xiong. 2022.
+Intent Contrastive Learning for Sequential Recommendation. In WWW. 2172–
+2182.
+[6] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. BERT:
+Pre-training of Deep Bidirectional Transformers for Language Understanding. In
+NAACL-HLT. 4171–4186.
+[7] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xi-
+aohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg
+Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby. 2021. An Image is
+Worth 16x16 Words: Transformers for Image Recognition at Scale. In ICLR.
+[8] Ziwei Fan, Zhiwei Liu, Yu Wang, Alice Wang, Zahra Nazari, Lei Zheng, Hao Peng,
+and Philip S. Yu. 2022. Sequential Recommendation via Stochastic Self-Attention.
+In WWW. 2036–2047.
+[9] Hui Fang, Danning Zhang, Yiheng Shu, and Guibing Guo. 2020. Deep learning
+for sequential recommendation: Algorithms, influential factors, and evaluations.
+TOIS 39, 1 (2020), 1–42.
+[10] Wei Guo, Can Zhang, Zhicheng He, Jiarui Qin, Huifeng Guo, Bo Chen, Ruiming
+Tang, Xiuqiang He, and Rui Zhang. 2022. MISS: Multi-Interest Self-Supervised
+Learning Framework for Click-Through Rate Prediction. In ICDE. 727–740.
+[11] Kaiming He, Haoqi Fan, Yuxin Wu, Saining Xie, and Ross B. Girshick. 2020.
+Momentum Contrast for Unsupervised Visual Representation Learning. In CVPR.
+9726–9735.
+[12] Ruining He and Julian J. McAuley. 2016. Fusing Similarity Models with Markov
+Chains for Sparse Sequential Recommendation. In ICDM. 191–200.
+[13] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk.
+2016. Session-based Recommendations with Recurrent Neural Networks. In
+ICLR.
+[14] Jeff Johnson, Matthijs Douze, and Hervé Jégou. 2021. Billion-Scale Similarity
+Search with GPUs. Big Data 7, 3 (2021), 535–547.
+[15] Wang-Cheng Kang and Julian J. McAuley. 2018. Self-Attentive Sequential Rec-
+ommendation. In ICDM. 197–206.
+[16] Diederik P. Kingma and Jimmy Ba. 2015. Adam: A Method for Stochastic Opti-
+mization. In ICLR.
+[17] Walid Krichene and Steffen Rendle. 2020. On Sampled Metrics for Item Recom-
+mendation. In KDD. 1748–1757.
+[18] Chao Li, Zhiyuan Liu, Mengmeng Wu, Yuchi Xu, Huan Zhao, Pipei Huang, Guo-
+liang Kang, Qiwei Chen, Wei Li, and Dik Lun Lee. 2019. Multi-Interest Network
+with Dynamic Routing for Recommendation at Tmall. In CIKM. 2615–2623.
+[19] Haoyang Li, Xin Wang, Ziwei Zhang, Jianxin Ma, Peng Cui, and Wenwu Zhu. 2022.
+Intention-Aware Sequential Recommendation With Structured Intent Transition.
+TKDE 34, 11 (2022), 5403–5414.
+[20] Jiacheng Li, Tong Zhao, Jin Li, Jim Chan, Christos Faloutsos, George Karypis,
+Soo-Min Pantel, and Julian J. McAuley. 2022. Coarse-to-Fine Sparse Sequential
+Recommendation. In SIGIR. 2082–2086.
+[21] Xuewei Li, Aitong Sun, Mankun Zhao, Jian Yu, Kun Zhu, Di Jin, Mei Yu, and
+Ruiguo Yu. 2023. Multi-Intention Oriented Contrastive Learning for Sequential
+Recommendation. In WSDM. 411–419.
+[22] Yang Li, Tong Chen, Peng-Fei Zhang, and Hongzhi Yin. 2021. Lightweight Self-
+Attentive Sequential Recommendation. In CIKM. 967–977.
+[23] Zhiwei Liu, Yongjun Chen, Jia Li, Philip S Yu, Julian McAuley, and Caiming
+Xiong. 2021. Contrastive self-supervised sequential recommendation with robust
+augmentation. arXiv preprint arXiv:2108.06479 (2021).
+[24] Zhiwei Liu, Xiaohan Li, Ziwei Fan, Stephen Guo, Kannan Achan, and Philip S.
+Yu. 2020. Basket Recommendation with Multi-Intent Translation Graph Neural
+Network. In BigData. 728–737.
+[25] Anjing Luo, Pengpeng Zhao, Yanchi Liu, Fuzhen Zhuang, Deqing Wang, Jiajie Xu,
+Junhua Fang, and Victor S. Sheng. 2020. Collaborative Self-Attention Network
+for Session-based Recommendation. In IJCAI. 2591–2597.
+[26] Jianxin Ma, Chang Zhou, Hongxia Yang, Peng Cui, Xin Wang, and Wenwu Zhu.
+2020. Disentangled Self-Supervision in Sequential Recommenders. In KDD. ACM,
+483–491.
+[27] Xiuyuan Qin, Huanhuan Yuan, Pengpeng Zhao, Junhua Fang, Fuzhen Zhuang,
+Guanfeng Liu, Yanchi Liu, and Victor S. Sheng. 2023. Meta-optimized Contrastive
+Learning for Sequential Recommendation. In SIGIR. 89–98.
+[28] Ruihong Qiu, Zi Huang, and Hongzhi Yin. 2021. Memory Augmented Multi-
+Instance Contrastive Predictive Coding for Sequential Recommendation. In ICDM.
+519–528.
+[29] Ruihong Qiu, Zi Huang, Hongzhi Yin, and Zijian Wang. 2022. Contrastive
+learning for representation degeneration problem in sequential recommendation.
+In WSDM. 813–823.
+[30] Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme.
+2009. BPR: Bayesian Personalized Ranking from Implicit Feedback. In UAI. 452–
+461.
+[31] Steffen Rendle, Christoph Freudenthaler, and Lars Schmidt-Thieme. 2010. Factor-
+izing personalized Markov chains for next-basket recommendation. In WWW.
+811–820.
+[32] Deepjyoti Roy and Mala Dutta. 2022. A systematic review and research perspec-
+tive on recommender systems. Journal of Big Data 9, 1 (2022), 59.
+[33] Nitish Srivastava, Geoffrey Hinton, Alex Krizhevsky, Ilya Sutskever, and Ruslan
+Salakhutdinov. 2014. Dropout: a simple way to prevent neural networks from
+overfitting. JMLR 15, 1 (2014), 1929–1958.
+[34] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang.
+2019. BERT4Rec: Sequential Recommendation with Bidirectional Encoder Repre-
+sentations from Transformer. In CIKM. 1441–1450.
+[35] Qiaoyu Tan, Jianwei Zhang, Jiangchao Yao, Ninghao Liu, Jingren Zhou, Hongxia
+Yang, and Xia Hu. 2021. Sparse-Interest Network for Sequential Recommendation.
+In WSDM. 598–606.
+[36] Yong Kiam Tan, Xinxing Xu, and Yong Liu. 2016. Improved recurrent neural
+networks for session-based recommendations. In DLRS@RecSys. 17–22.
+[37] Jiaxi Tang and Ke Wang. 2018. Personalized Top-N Sequential Recommendation
+via Convolutional Sequence Embedding. In WSDM. 565–573.
+[38] Md. Mehrab Tanjim, Congzhe Su, Ethan Benjamin, Diane Hu, Liangjie Hong, and
+Julian J. McAuley. 2020. Attentive Sequential Models of Latent Intent for Next
+Item Recommendation. In WWW. 2528–2534.
+[39] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones,
+Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. 2017. Attention is All
+you Need. In NeurIPS. 5998–6008.
+[40] Shoujin Wang, Liang Hu, Yan Wang, Longbing Cao, Quan Z. Sheng, and
+Mehmet A. Orgun. 2019. Sequential Recommender Systems: Challenges, Progress
+and Prospects. In IJCAI. 6332–6338.
+[41] Shoujin Wang, Liang Hu, Yan Wang, Quan Z Sheng, Mehmet Orgun, and Long-
+bing Cao. 2019. Modeling multi-purpose sessions for next-item recommendations
+via mixture-channel purpose routing networks. In IJCAI. 3771–3777.
+[42] Xiang Wang, Xiangnan He, Meng Wang, Fuli Feng, and Tat-Seng Chua. 2019.
+Neural graph collaborative filtering. In SIGIR. 165–174.
+[43] David Warde-Farley, Ian J. Goodfellow, Aaron C. Courville, and Yoshua Bengio.
+2014. An empirical analysis of dropout in piecewise linear networks. In ICLR.
+[44] Chao-Yuan Wu, Amr Ahmed, Alex Beutel, Alexander J. Smola, and How Jing.
+2017. Recurrent Recommender Networks. In WSDM. 495–503.
+[45] Jiancan Wu, Xiang Wang, Fuli Feng, Xiangnan He, Liang Chen, Jianxun Lian,
+and Xing Xie. 2021. Self-supervised Graph Learning for Recommendation. In
+SIGIR. 726–735.
+[46] Xin Xia, Hongzhi Yin, Junliang Yu, Qinyong Wang, Lizhen Cui, and Xiangliang
+Zhang. 2021. Self-Supervised Hypergraph Convolutional Networks for Session-
+based Recommendation. In AAAI. 4503–4511.
+[47] Xu Xie, Fei Sun, Zhaoyang Liu, Shiwen Wu, Jinyang Gao, Jiandong Zhang, Bolin
+Ding, and Bin Cui. 2022. Contrastive Learning for Sequential Recommendation.
+In ICDE. 1259–1273.
+[48] Junliang Yu, Hongzhi Yin, Xin Xia, Tong Chen, Jundong Li, and Zi Huang. 2023.
+Self-supervised learning for recommender systems: A survey. TKDE (2023).
+[49] Shuai Zhang, Lina Yao, Aixin Sun, and Yi Tay. 2019. Deep learning based recom-
+mender system: A survey and new perspectives. CSUR 52, 1 (2019), 1–38.
+[50] Yixin Zhang, Yong Liu, Yonghui Xu, Hao Xiong, Chenyi Lei, Wei He, Lizhen Cui,
+and Chunyan Miao. 2022. Enhancing Sequential Recommendation with Graph
+Contrastive Learning. In IJCAI. 2398–2405.
+[51] Kun Zhou, Hui Wang, Wayne Xin Zhao, Yutao Zhu, Sirui Wang, Fuzheng Zhang,
+Zhongyuan Wang, and Ji-Rong Wen. 2020. S3-rec: Self-supervised learning for
+sequential recommendation with mutual information maximization. In CIKM.
+1893–1902.
+[52] Yanqiao Zhu, Yichen Xu, Feng Yu, Qiang Liu, Shu Wu, and Liang Wang. 2021.
+Graph Contrastive Learning with Adaptive Augmentation. In WWW. 2069–2080.
+556

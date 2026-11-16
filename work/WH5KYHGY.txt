@@ -1,0 +1,1426 @@
+IEEJ TRANSACTIONS ON ELECTRICAL AND ELECTRONIC ENGINEERING
+IEEJ Trans 2024; 19: 1396–1404
+Published online in Wiley Online Library (wileyonlinelibrary.com). DOI:10.1002/tee.24087
+Paper
+Predictability-Aware Subsequence Modeling for Sequential Recommendation
+Hangyu Deng, Non-member
+Jinglu Hua, Member
+Sequential recommendation frames the recommendation task as a next-item prediction problem, where the model is trained
+to predict the next item given a user behavior sequence. While recent research has made signiﬁcant progress in developing
+advanced models for this task, there exists a notable gap in the exploration of subsequences and the predictability inherent
+in user behavior sequences. This oversight can lead models to recall inconsequential sequential patterns, adversely affecting
+recommendation quality. In this paper, we introduce a novel approach to augmenting sequential recommendation by integrating
+predictability awareness into subsequence modeling. Our method begins by discerning the predictability of target items; those
+easily predicted often align with the preceding subsequence, while those that are hard to predict typically indicate transitions
+to other subsequences. Leveraging this predictability information, we enhance the discovery of meaningful subsequences within
+individual user behavior sequences. Evaluation of four benchmark data sets using various state-of-the-art sequential models
+illustrates the efﬁcacy of our approach in enhancing recommendation performance. © 2024 Institute of Electrical Engineers of
+Japan and Wiley Periodicals LLC.
+Keywords: recommendation systems; sequential recommendation; implicit feedback; online advertising
+Received 1 December 2023; Revised 6 March 2024; Accepted 12 April 2024
+1.
+Introduction
+In the digital age, where information overload is a common
+challenge, recommender systems play a pivotal role in shaping
+user experiences and facilitating content discovery [1,2]. These
+systems have become indispensable in various online platforms,
+ranging from e-commerce to social media. By analyzing user pref-
+erences and behaviors, recommender systems intelligently suggest
+personalized items, whether products, movies, or content, thereby
+enhancing user satisfaction and engagement. The ability to provide
+tailored recommendations not only streamlines decision-making
+processes for users but also contributes to increased user retention
+and business revenue [3]. As the demand for personalized
+experiences continues to grow, the importance of advancing
+recommender
+system
+methodologies
+becomes
+increasingly
+pronounced.
+The primary objective of recommender systems is to model
+how users interact with items. Sequential recommendation, which
+takes into account the chronological order of interactions, has been
+shown to be effective in capturing user preferences over time.
+Speciﬁcally, it formulates the recommendation task as a next-item
+prediction problem, aiming to predict the item that a user is most
+likely to visit next. However, mining meaningful patterns from
+sequential data remains a challenging task. Despite the wealth of
+personalized information that can be mined from user behavior
+sequences, extracting interesting and meaningful patterns from this
+type of data is still an open research question.
+a Correspondence to: Jinglu Hu. E-mail: jinglu@waseda.jp
+Graduate School of Information, Production and Systems, Waseda
+University,
+2–7
+Hibikino,
+Wakamatsu,
+Kitakyushu-shi
+Fukuoka,
+808–0135, Japan
+To better encode the behavior sequences, recent studies have
+turned to deep sequence models, including recurrent neural
+networks (RNNs) [4] and Transformers [5]. Notably, autoregres-
+sive training, a technique widely successful in natural language
+processing (NLP), is commonly employed. In general, it is
+reasonable to employ methods in the NLP ﬁeld for sequential
+recommendation since the task bears similarities to language
+modeling.
+Although sequential recommendation models have exhibited
+remarkable performance, it is crucial to acknowledge the dissim-
+ilarities between user behavior data and textual data. Generally
+speaking, user behavior sequences tend to be more diverse and
+unpredictable compared to natural language sentences. After all,
+a sentence needs to comply with grammar rules and adhere to the
+logic of the context, while user behavior does not have such strict
+constraints. For example, Fig. 1 shows a fragment of a behavior
+sequence in the training set of the Amazon_Electronics data set.
+The user behavior sequence is a diverse mixture of items spanning
+various categories. Multiple subsequences emerge, each associated
+with distinct themes such as MP3s, laptops, and cameras. This
+suggests a broad interest by the user across different types of
+items over time. However, the autoregressive training mechanism
+employed by current sequential recommenders [6–9] ignores the
+differences between items and treats them equally. It calculates
+the losses between target items and model predictions and updates
+the parameters, leading the model to remember and predict the
+next items, including those that are not related, even if they do
+not follow any discernible pattern. This training process can result
+in the model falsely considering a connection to unpredictable
+items as a reasonable pattern.
+In this paper, we aim to model the subsequences of user behav-
+ior sequences by incorporating predictability information. A novel
+© 2024 Institute of Electrical Engineers of Japan and Wiley Periodicals LLC.
+
+PREDICTABILITY-AWARE SUBSEQUENCE MODELING
+Fig. 1. A real example of user behavior sequence in Amazon data set.
+method to assess the predictability of items within the training
+set is introduced, serving dual purposes. First, items with low
+predictability may signify a lack of relevance to the preceding
+subsequence, aiding in the identiﬁcation of subsequence bound-
+aries. Second, losses computed for hard items are given reduced
+weight, mitigating the likelihood of the model memorizing incon-
+sequential item transitions. To evaluate the effectiveness of our
+framework, we conduct extensive experiments on four publicly
+available data sets using several widely adopted and state-of-the-art
+sequential recommendation models. Our results demonstrate
+that the proposed method outperforms the baseline models in
+most cases. Moreover, we explore the properties of the framework
+through comparative experiments and hyperparameter studies. One
+of the key applications of our method lies in enhancing person-
+alized recommendations in various domains such as e-commerce,
+and content platforms. By incorporating predictability awareness
+into subsequence modeling, our method improves the accuracy and
+relevance of recommended items to individual users. Besides, our
+approach can be integrated into existing recommendation systems,
+leveraging their infrastructure and data pipelines. It can serve as
+a ranking module directly. In addition, it can be implemented as
+a pre-processing step in the recommendation pipeline, where the
+predictability of items is assessed before feeding the data into the
+recommendation model. By analyzing the predictability of items
+in users’ browsing histories, the system can deliver more relevant
+product recommendations, leading to increased user satisfaction
+and higher conversion rates.
+The contributions are summarized as follows:
+• We illuminate the signiﬁcance of incorporating predictability
+considerations into user behavior data for the sequential
+recommendation, which explicitly reduces the risk of the
+model memorizing inconsequential patterns.
+• We address the challenge posed by hard items in sequential
+recommendation through a practical subsequence modeling
+approach, providing a systematic method to enhance the
+model’s adaptability to dynamic user preferences.
+• We conduct extensive experiments on four widely-used
+public data sets, which verify the effectiveness of the
+proposed method.
+2.
+Related Work
+Sequential recommendation methods have evolved into a spe-
+cialized domain within recommender systems, designed to capture
+the temporal dynamics and evolving preferences of users. These
+approaches consider the sequential nature of user-item interactions,
+leveraging dependencies between past and future actions. FPMC
+[10] operates on the assumption that the behavior sequence forms
+a Markov chain conditioned on the user. GRU4Rec [6] employs
+an RNN-based architecture to encode item sequences, utilizing a
+sequence-parallel mini-batch strategy for training. SASRec [7] uti-
+lizes self-attention mechanisms to capture long-term dependencies,
+demonstrating notable performance in sequential recommendation
+tasks. BERT4Rec [11] draws inspiration from BERT [12], imple-
+menting a bidirectional Transformer model and adapting BERT-
+style training strategies for sequential recommendation through
+the introduction of the Cloze objective. LightSANs [8] enhances
+SASRec by introducing a low-rank decomposed self-attention
+mechanism, reducing computational complexity while preserving
+performance.
+In the context of modeling users’ multiple interests, recent
+methods typically introduce a set of user representation vec-
+tors. MIND [13] introduces a multi-interest framework with
+a dynamic routing algorithm [14] to extract multiple inter-
+ests from user behaviors. SINE [15] employs a sparse multi-
+interest module to identify a speciﬁc set of concepts for each
+user, narrowing down the range of interests and enabling more
+focused and personalized recommendations. GSSE4Rec [16]
+utilizes global item transitions to improve the extraction of
+subsequences.
+3. Methodology
+The overview of our method is depicted in Fig. 2, consisting
+of two distinct stages. In the initial stage, we evaluate the
+predictability of items employing a fast and efﬁcient sequence
+model. Each target item in the training set is assigned a ﬂag,
+where 1 indicates it is hard to predict and 0 denotes it is easy
+to predict. In the subsequent stage, this predictability information
+serves to identify boundaries between distinct subsequences. It is
+also utilized to reduce the weight of losses for hard items to prevent
+remembering unrelated item transitions.
+Speciﬁcally, in this work, we treat user behavior data as a
+collection of user-item interactions, denoting the set of users as
+U, and the set of items as I. Speciﬁcally tailored for sequential
+recommendation tasks, we organize user-item interactions by users
+and arrange them chronologically, thereby forming user behavior
+sequences. Each user u ∈U is linked to a behavioral sequence
+Bu =
+
+Bu
+t |t = 1, 2, . . . , |Bu|
+
+, where Bu
+t ∈I signiﬁes the tth item
+that the user visited and |Bu| denotes the number of items in
+Bu. A data sample is deﬁned as a tuple
+
+Bu
+[1:t−1], Bu
+t
+
+, where
+Bu
+[1:t−1] =
+
+Bu
+1 , Bu
+2 , . . . , Bu
+t−1
+
+represents the input sequence, and
+Bu
+t is the corresponding target item.
+A sequential recommendation model, tasked with predicting
+the probability distribution of the next item, is deﬁned as
+follows:
+yu
+t = fSeqModel
+
+Bu
+[1:t−1]
+
+(1)
+1397
+IEEJ Trans 19: 1396–1404 (2024)
+ 19314981, 2024, 8, Downloaded from https://onlinelibrary.wiley.com/doi/10.1002/tee.24087 by Chongqing University, Wiley Online Library on [28/10/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+
+H. DENG, AND J. HU
+Fig. 2. Overview of our method
+where yu
+t ∈R|I|×1 denotes the vector of probabilities over all the
+items, indicating the likelihood that the user u will visit a particular
+item at time step t. Recommendations are subsequently generated
+by selecting items with high probabilities.
+Next, we explain our approach in detail, including the assess-
+ment of the predictability of target items, the model structure, and
+the training objective.
+3.1.
+Assessing the predictability of target items
+Due to the high-dimensional, sparse, and complex nature of data
+in sequential recommendation, it is challenging to identify the
+predictability of target items directly. Our approach to circumvent
+this issue is to employ a fast and well-established model. First,
+let us consider a normal case. If a target item in the test set can
+be correctly predicted by the model, we can conﬁdently say it
+is predictable. If not, it may be hard to predict or just inherently
+unpredictable. The goal is to assess the predictability of target
+items in the training set, but it is inadequate to use a model
+trained on the original training set to make this determination.
+To overcome this limitation, we can employ the leave-one-out
+strategy, where we leave one data sample out of the training set
+and train a model on the remaining data. We then test the left-out
+sample to obtain a ﬂag indicating whether the target item is
+predictable according to the test result. To avoid data leakage, we
+need to ensure that the smallest unit left out is a user with all the
+corresponding samples. Although such a leave-one-out strategy
+helps us obtain a model very close to the model trained on the orig-
+inal data, it is unrealistic to train a brand new model for evaluating
+the predictability of target items for each user. So we approximate
+this process by employing a similar idea to k-fold cross-validation.
+Think of this process as testing whether a model can accurately
+predict what a user will do next based on their past behavior.
+We train the model on most of the data but leave out a small por-
+tion to see how well it predicts the next action. By repeating this
+process for different users and items, we can assess how pre-
+dictable certain items are in a way that is both accurate and
+efﬁcient.
+Algorithm 1 Assessing the predictability of target items
+Input: the training set Dtrain, the sequence model fFastModel, the
+number of subsets K, the threshold for deﬁning hard items T.
+Output: the training set with ﬂag Dtrain_ﬂag.
+Assign users in Dtrain into K
+subsets (D1, D2, . . . , DK )
+randomly and uniformly.
+for k ∈(1, 2, . . . , K) do
+Leave Dk out and merge the rest of the subsets as Dtrain_k.
+Initialize fFastModel and train it with Dtrain_k.
+Test the fFastModel on Dk and record the ranking of each
+sample Ru
+t in Drank_k.
+end for
+Merge (Drank_1, Drank_2, . . . , Drank_K ) into Dtrain_rank.
+Replace the rank in Dtrain_rank with ﬂag Fu
+t , and obtain Dtrain_ﬂag.
+More speciﬁcally, we ﬁrst take out the last two items of the user
+behavior sequence for validation and testing, and take the rest
+of the items for the training, like many others do [7,8,17]. The
+training set is then deﬁned as a set of sequence-item pairs:
+Dtrain =
+
+Bu
+[1:t−1], Bu
+t
+	
+| u ∈U, t ∈
+
+2, |Bu| −2
+
+(2)
+where Bu
+[1:t−1] represents the input sequence (items before timestep
+t), Bu
+t
+denotes the target item (the item at timestep). Note that
+the last two items are assigned to the validation set and test set.
+Therefore, the upper bound of t is |Bu| −2.
+We then randomly and uniformly divide the users into K
+groups, forming up K subsets of the training set, which can be
+described as:
+D1, D2, . . . , DK = Split(Dtrain)
+(3)
+For each iteration, we leave out one subset and merge the rest
+of the subsets to form a smaller training set:
+Dtrain_k = Dtrain −Dk
+(4)
+1398
+IEEJ Trans 19: 1396–1404 (2024)
+ 19314981, 2024, 8, Downloaded from https://onlinelibrary.wiley.com/doi/10.1002/tee.24087 by Chongqing University, Wiley Online Library on [28/10/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+
+PREDICTABILITY-AWARE SUBSEQUENCE MODELING
+where k = 1, 2, , K denotes the index of the subset left out. After
+that, a fast model is trained on Dtrain_k, and tested on Dk, and we
+record the rankings of the target items in Drankk :
+fFastModel = Train
+
+Dtrain_k; fFastModel
+
+(5)
+Ru
+t = Rank
+
+Bu
+[1:t−1], Bu
+t ; fFastModel
+
+(6)
+Drank_k =
+
+Bu
+[1:t−1], Bu
+t , Ru
+t
+	
+|
+
+Bu
+[1:t−1]Bu
+t
+	
+∈Dk
+
+(7)
+where Train(·) denotes the normal training process for the model
+employed here, Rank(·) denotes the function that calculates the
+ranking of the target item given the fast model. The above
+procedures are iterated for K times, scanning the entire training
+set and recording the ranking for all the target items. The training
+data set with predictability information is obtained by merging all
+the Drank_k (k = 1, 2, . . . , K):
+Dtrain_rank = Drank_1 ∪Drank_2 ∪. . . ∪Drank_K
+(8)
+Finally, if the ranking is greater than some threshold τ, we
+consider the corresponding target item hard to be predicted. This
+predictability information is stored in ﬂag Fu
+t :
+Fu
+t =
+1,
+if
+Ru
+t ≥τ
+0,
+otherwise
+(9)
+In practice, we automatically set the threshold ranking τ with
+respect to the distribution of the rankings:
+τ = quantile
+
+Ru
+t | ⟨u, t⟩∈Dtrain
+
+, T
+
+(10)
+where quantile(·, T) represents taking the T −quantile of the set of
+rankings as the threshold ranking, where T is the hyperparameter
+determining the threshold. The ﬁnal training set with ﬂags can be
+described as:
+Dtrain_ﬂag =
+
+Bu
+[1:t−1], Fu
+[2:t], Bu
+t
+
+|u ∈U, t ∈[2, |Bu| −2]
+
+,
+(11)
+where Fu
+[2:t] =
+
+Fu
+2, Fu
+3, . . . , Fu
+t
+
+signiﬁes the predictability of the
+next items for the input sequence Bu
+[1:t−1].
+It is worth noting that we do not further exploit the precise
+ranking information in the following stage but instead compress
+it into a binary ﬂag of 0 or 1. The reason is that we wanted to
+focus on studying the impact of the hard items and the propor-
+tion of these items that are considered, rather than the precise
+ranking values themselves. By simplifying the ranking informa-
+tion into binary ﬂags, we can easily control and vary the portion
+of hard items to be considered during the subsequent stages of
+our proposed method. This allows us to isolate and investigate the
+impact of hard items on the recommendation performance, without
+confounding factors from other ranking information. The full algo-
+rithm for assessing the predictability of target items is presented
+in Algorithm 1.
+3.2.
+Model structure
+Figure 3 illustrates the architecture
+of the proposed neural network model. The model takes as
+input the raw user behavior sequence and encodes them using
+a Transformer encoder. Next, a subsequence assignment (SA)
+module is introduced to identify users’ diverse subsequences. Next,
+the subsequences are processed by a series of sequence models
+tailored for handling different user intentions. Finally, in the output
+layer, the ﬁnal user representation is generated by merging the
+results from the sequence models.
+Fig. 3. Overview of the model structure
+3.2.1. Transformer encoder
+The model takes as input
+a user behavior sequence Bu
+[1:t−1] up to a speciﬁed timestep
+t. To construct a holistic representation of the input items,
+we utilize a Transformer encoder augmented with learnable
+positional embeddings to encode the input sequence. This encoder
+effectively consolidates information from preceding items into the
+representation of the subsequent item. The output is a series of
+corresponding item vectors:
+X = [x1, x2, . . . , xn]T
+(12)
+= TransformerEncoder
+
+Bu
+[1:t−1]
+
+(13)
+where n denotes the pre-deﬁned maximum length, and xi ∈R1×d
+(1 ≤i ≤n) is the representation of the ith item.
+3.2.2. Subsequence
+assignment
+Upon
+receiving
+the
+encoded input sequence, the subsequence assignment module
+undertakes the task of categorizing each item into distinct
+subsequences based on its relationships with preceding items
+in the sequence. To facilitate an end-to-end training process
+for the entire system, this module is fundamentally imple-
+mented as a neural network classiﬁer operating on individual
+items.
+S = [s1, s2, . . . , sn, ]T = Softmax(XW)
+(14)
+where S ∈Rn×c is the matrix that stores the subsequence assign-
+ment results for the n input items si ∈R1×c, W ∈Rd×c denotes
+the learnable matrix for linear transformation. They are initialized
+randomly and updated during training. c is a hyperparameter
+indicating the number of subsequences. Softmax(·) represents
+a Softmax function on each item representation, producing the
+probability distribution over the c subsequences.
+With the assignment results S, we can generate the discovered
+subsequences, by assigning item sequence X into different
+subsequences with the probabilities computed in (14) as the
+weight factors. And we store the subsequences in X ∈Rc×n×d.
+For simplicity, we describe the computation of X in Einstein
+1399
+IEEJ Trans 19: 1396–1404 (2024)
+ 19314981, 2024, 8, Downloaded from https://onlinelibrary.wiley.com/doi/10.1002/tee.24087 by Chongqing University, Wiley Online Library on [28/10/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+
+H. DENG, AND J. HU
+notation
+1:
+Xijk = (X · S)ijk = (X)ij · (S)ik
+(15)
+The
+obtained
+sequence
+representation
+X
+consists
+of
+c
+subsequences:
+X =
+
+X
+(1),X
+(2), . . . ,X
+(c)
+(16)
+where X
+(k) ∈Rn×d (k = 1, 2, . . . , c) denotes the subsequence of
+item representations.
+3.2.3. Downstream sequence models and output layer
+Inside the multiple subsequences, we can model the user’s multiple
+interests with downstream sequence models. Here we simply
+employ the encoder part of SASRec [7], which is a widely used
+backbone model in the ﬁeld of sequential recommendation:
+u(i)
+t
+= SASReci
+
+X(i)
+(17)
+where i = 1, 2, . . . , c denotes the index of subsequence. And the
+ﬁnal output is the mean-pooling of user representations:
+ut = 1
+c
+c
+
+i=1
+u(i)
+t
+(18)
+With the ﬁnal user representation ut ∈Rd×1, we can obtain the
+model prediction for the user at time step t by comparing the user
+representation and item embedding matrix:
+yu
+t = Softmax(Eut)
+(19)
+where yu
+t is the ﬁnal next-item prediction deﬁned in (1), and E ∈
+R|I|×d denotes the item embedding matrix used in the Transformer
+encoder [5,12].
+3.3.
+Objective function
+In the training phase, the user
+behavior sequence is randomly sampled from the training set,
+with the preceding items provided as input to the model, and the
+subsequent item designated as the target. Note that in cases where
+the length of the input sequence exceeds the pre-deﬁned maximum
+n, we discard the previous samples so that the length can ﬁt the
+setting. The overall objective function is as follows:
+L = Llog + Laux
+(20)
+where Llog denotes the main objective function for the next-item
+prediction, and Laux represents the auxiliary loss function designed
+to guide the learning process of the subsequence assignment
+module.
+3.3.1. Main objective function
+The main objective is to
+predict the subsequent item based on a sequence of preceding
+items. The loss function is the Cross-Entropy loss:
+Lu
+t = −
+
+yu
+t
+T logyu
+t
+(21)
+where yu
+t ∈R|I|×1 denotes the one-hot vector of Bu
+t . It is a column
+vector with |I| dimensions, with 1 at the dimension of the index
+of Bu
+t and 0s in the rest dimensions.
+To reduce the risk of recalling unrelated item transitions, items
+classiﬁed as challenging to predict are endowed with weights
+1 https://pytorch.org/docs/stable/generated/torch.einsum.html.
+within the loss calculation. The main objective function is for-
+mulated as a weighted summation of Cross-Entropy losses. In
+accordance with the predictability evaluation outlined in (9), train-
+ing samples identiﬁed as difﬁcult to predict are correspondingly
+down-weighted:
+Llog =
+
+u∈U
+
+t∈[2,|Bu|−2]
+
+pFu
+t Lu
+t +
+
+1 −Fu
+t
+
+Lu
+t
+
+(22)
+where Fu
+t obtained in (9) indicates the hard item, and p is the
+hyperparameter controlling the weight for hard items.
+3.3.2. Auxiliary loss to guide the subsequence assignment
+Given that only item IDs are available without additional infor-
+mation, generating labels for subsequence assignment becomes
+a challenging task. To address this challenge, we introduce an
+auxiliary loss designed to guide the learning process of the subse-
+quence assignment module. The fundamental concept underlying
+this approach is that if predicting the next item proves to be dif-
+ﬁcult, the outcome of the subsequence assignment is likely to
+change. Conversely, if predicting the next item is straightforward,
+the subsequence assignment result is expected to remain consistent
+with the preceding one. The auxiliary loss is described as follows:
+Laux =
+
+u∈U
+
+t∈[2,|Bu|−3]
+
+Fu
+t stsT
+t+1 −
+
+1 −Fu
+t
+
+stsT
+t+1,
+
+(23)
+where stsT
+t+1 represents the inner product of consecutive assign-
+ment results, serving as a measure of similarity. The penalty in
+this context is applied when the module, faced with a challeng-
+ing prediction of the next item, outputs assignment results that are
+overly similar. Conversely, when predicting the next item is easy,
+the penalty is incurred if the module outputs dissimilar results.
+3.4.
+More discussions
+3.4.1. Time complexity
+The computational complexity of
+our model primarily arises from the Transformer encoder [5] and
+downstream sequence models. The adopted downstream sequence
+model, SASRec [7], shares the same computational complexity
+as the Transformer encoder, resulting in a combined complex-
+ity of O
+
+(c + 1)
+
+n2d + nd2
+. An advantageous feature of our
+model is the fully parallelizable computation within each down-
+stream sequence model, making it conducive to GPU acceleration.
+This results in a time complexity of O
+
+2
+
+n2d + nd2
+. For the
+predictability assessment of items, the computational complexity
+is primarily attributed to the training of the fast model, which
+amounts to O
+
+K K−1
+K |U|
+
+= O((K −1)|U|).
+3.4.2. Broader implications of predictability-aware mod-
+eling
+The application of predictability-aware modeling extends
+beyond sequential recommendation to various domains of machine
+learning and data analysis. In time-series forecasting, such models
+can enhance the accuracy of predictions by incorporating informa-
+tion about the predictability of data points. Similarly, in anomaly
+detection tasks, considering the predictability of data can improve
+the identiﬁcation of abnormal patterns and reduce false positives.
+3.4.3. Potential limitations and future research directions
+As with any modeling approach, there exist potential limitations
+and avenues for future research that warrant consideration. One
+limitation is the reliance on predeﬁned predictability thresholds,
+which may not always capture the nuanced predictability patterns
+present in diverse data sets. Future research could explore adaptive
+1400
+IEEJ Trans 19: 1396–1404 (2024)
+ 19314981, 2024, 8, Downloaded from https://onlinelibrary.wiley.com/doi/10.1002/tee.24087 by Chongqing University, Wiley Online Library on [28/10/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+
+PREDICTABILITY-AWARE SUBSEQUENCE MODELING
+methods for determining predictability thresholds based on data
+characteristics or user feedback. Additionally, while our method
+has demonstrated effectiveness in improving recommendation
+performance, further investigation is needed to understand its
+scalability and computational efﬁciency, particularly in large-scale
+recommendation systems. Exploring techniques to streamline the
+predictability assessment process and optimize model training
+procedures can address these scalability challenges. Further-
+more, integrating user feedback mechanisms and enhancing the
+interpretability of the model are important directions for future
+research to enhance the user experience and recommendation
+quality. By addressing these potential limitations and exploring
+these future research directions, we can continue to advance
+the ﬁeld of predictability-aware modeling and its applications in
+recommendation systems and beyond.
+4.
+Experiments
+In this section, we outline our experimental methodology
+designed to assess the efﬁcacy of our proposed approach. First, we
+provide a comprehensive introduction to the data sets, evaluation
+metrics, and competing methods. Next, we conduct a comparative
+analysis of our proposed method and various competitors. Finally,
+we empirically validate the key designs of our approach.
+4.1.
+Experimental settings
+4.1.1. Data sets
+Our proposed methods undergo evaluation
+on four extensively utilized real-world data sets derived from
+two primary sources: Amazon [18] and MovieLens [19]. The
+Amazon data set, widely employed in previous studies [7,8,17],
+encompasses user reviews across diverse items within the Amazon
+platform. It stands out as a relatively sparse data set tailored for
+sequential recommendation. For our assessment, we opt for three
+speciﬁc subsets, namely Beauty, Video Games, and Electronics.
+The Movielens data set stands as a well-established benchmark,
+housing user ratings for a myriad of movies. In our experiments,
+we leverage the Movielens-1M (ML-1M) data set, known for its
+density and widespread use [7–9]. This data set exhibits relatively
+dense user-item interactions, featuring a moderate number of users
+and items but comprising a substantial one million interactions.
+To ensure a robust data set, we enforce the 5-core setting,
+ﬁltering the original data to guarantee each user has a minimum
+of ﬁve behaviors, and each item is interacted with by at least ﬁve
+users within the remaining data set, which is a common practice in
+the ﬁeld. A summary of the data set statistics post-preprocessing
+is provided in Table I.
+4.1.2. Evaluation metrics
+In our experimental evaluation,
+we employ two widely recognized metrics: Hit Ratio (HIT) and
+Normalized Discounted Cumulative Gain (NDCG). HIT@k is
+deﬁned as the proportion of users for whom the system accurately
+places the target item within the top k recommendations [20].
+NDCG@k incorporates the positional information of items within
+the list of the top k recommendations [21]. This metric operates on
+the premise that items ranked higher should receive greater credit
+than their lower-ranked counterparts.
+To eliminate potential biases, we employ a rigorous evaluation
+approach where the ground-truth item is ranked alongside all other
+items [22].
+Table I. Statistics of data sets
+Data set
+Users
+Items
+Interactions Avg. length Sparsity
+Beauty
+22 363
+12 101
+198 502
+8.9
+99.93%
+Games
+24 303
+10 672
+231 780
+9.5
+99.91%
+Electronics 192 401 63 001
+1 689 188
+8.7
+99.99%
+ML-1 M
+6040
+3416
+999 611
+165.5
+95.16%
+4.1.3. Competitors
+In our experimental evaluations, we
+assess the performance of our proposed method against several
+representative and state-of-the-art sequential recommendation
+models. These models fall into two distinct categories, with the
+ﬁrst group comprising techniques that predominantly rely on
+sequence modeling:
+• FPMC [10]: This method adheres to the Markov chain
+assumption for user behavior sequences. It integrates both
+user-item interactions and ﬁrst-order item-item dynamics.
+• GRU4Rec [6]: This method applies Gated Recurrent Unit
+(GRU) [23] architecture for modeling sequential patterns.
+• SASRec [7]: This method encodes user behavior sequences
+with Transformer encoders [5], capitalizing on self-attention
+mechanisms to capture sequential information.
+• LightSANs [8]: This method is a recent state-of-the-
+art model derived from SASRec. LightSANs introduces
+a low-rank self-attention mechanism to mitigate over-
+parameterization within the full self-attention matrix.
+The second group encompasses models designed to capture
+multiple interests of the user:
+• MIND [13]: It proposes a dynamic routing algorithm for
+modeling multi-interest recommendations.
+• SINE [15]: It introduces a sparse-interest module. SINE
+adaptively infers a sparse set of concepts for each user.
+• GSSE4SR [16]: It leverages global item transitions to
+enhance the extraction of subsequences.
+4.1.4. Implementation details
+We implement our method
+on Recbole [24] (Version 1.1.1), a comprehensive platform for
+recommendation research. Additionally, for competitor models, we
+utilize the pre-existing implementations provided by Recbole.
+In the assessment of predictability, we employ SASRec [7]
+model as the fFastModel, which is known for its efﬁciency and
+accuracy. The number of subsets K is set to 5 to ensure the
+performance of detection. The portion of target items to be
+considered predictable (T) is selected from 0.1 to 0.9, and the
+hyperparameter p that controls the weight of hard-to-predict items
+is selected from 0.0 to 0.9, w.r.t. the data set.
+For the network structure, we maintain an embedding size d of
+64, following the default setting in Recbole. The maximum length
+n is set to 50 for Amazon data sets and 200 for ML-1 M data set,
+consistent with established practices in related works [7,11]. We
+consider dropout rates from {0.2,0.5}. The number of subsequences
+c is chosen from 1 to 5.
+4.2.
+Performance comparison
+To initiate our analysis,
+we verify the effectiveness of our proposed method across four
+openly accessible data sets. Each value in Table II represents the
+1401
+IEEJ Trans 19: 1396–1404 (2024)
+ 19314981, 2024, 8, Downloaded from https://onlinelibrary.wiley.com/doi/10.1002/tee.24087 by Chongqing University, Wiley Online Library on [28/10/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+
+H. DENG, AND J. HU
+average outcome gleaned from four distinct experiments, with the
+best and second-best results emphasized in bold and underlined
+fonts. By comparing HIT and NDCG metrics in the experiments,
+we can obtain the following observations: (i) Among the initial set
+of competitors, models incorporating the self-attention mechanism,
+such as SASRec and LightSANs, outshine FPMC and GRU4Rec
+in most cases. This trend underscores the suitability of the self-
+attention mechanism for our speciﬁc task. (ii) Moving on to the
+second set of competitors, MIND exhibits notably poorer perfor-
+mance than SINE and GSSE4SR. This subpar result is attributed
+to MIND’s inadequacy in effectively utilizing sequential infor-
+mation. Essentially, MIND treats the input sequence merely as a
+set of items, disregarding crucial temporal nuances. (iii) Finally,
+our proposed method consistently demonstrates better performance
+across all data sets and metrics. This success can be credited to
+effectively using information about the predictability of items in
+the subsequence modeling. By integrating predictability aware-
+ness into subsequence modeling, our method enhances the discov-
+ery of meaningful patterns within user behavior sequences. This
+enables our model to make more accurate next-item predictions,
+resulting in improved recommendation performance. While our
+method outperforms existing models in most cases, it is essen-
+tial to acknowledge potential limitations. Compared to simpler
+methods, our approach has a higher system complexity due to the
+predictability-aware subsequence modeling. Before the training of
+the neural network model, it requires the process of predictability
+assessment. The overhead introduced by this step could pose a
+bottleneck in highly dynamic environments.
+4.3.
+Analysis of hyperparameters
+Here we assess
+the impact of hyperparameters by systematically varying one
+parameter at a time while keeping others constant. The results
+are visually presented in Fig. 4.
+Concerning subsequence modeling, the key hyperparameter is
+the number of subsequences c inﬂuencing the model’s granular-
+ity in understanding user behavior. We measure the performance
+using representative metrics, HIT@10 and NDCG@10, which are
+then scaled into the [0.0,1.0] interval for clarity. Our observa-
+tions reveal distinct optimal values for different data sets. For
+the Amazon data set, the best performance emerges with two
+subsequences, indicating that a more detailed analysis of user
+behavior, achieved through two segments, enhances recommen-
+dation outcomes. Conversely, the Movielens data set achieves
+superior performance with four local subsequences. This suggests
+that the Movielens data set beneﬁts from a broader exploration of
+user behavior, with four segments providing a more informative
+representation. The discrepancy in the optimal number of local
+subsequences can be attributed to the diverse characteristics of the
+data sets. The Amazon data set, characterized by sparsity, beneﬁts
+from a focused analysis with two local subsequences. In con-
+trast, the Movielens data set, featuring more interactions per user,
+necessitates a broader perspective and a higher number of local
+subsequences to effectively capture intricate patterns and diverse
+user interests.
+For the assessment of predictability, we have two key hyperpa-
+rameters: T ∈[0, 1], which controls the threshold ranking τ, deter-
+mines the portion of target items considered hard. And p ∈[0, 1],
+on the other hand, controls the weight of the loss of hard items in
+the objective function. More speciﬁcally, 1 −T of the target items
+are assigned a ﬂag equal to 1, and their weights in the objective
+function are set to p, while the weights of the remaining items are
+set to 1 according to Eq. (9) and (10). To investigate the impact
+of T and p, we conducted experiments on Beauty and varied the
+values of T and p from 0.0 to 1.0. The results are visualized in
+heatmaps, where the brightness of the pixels represents the corre-
+sponding results. We set the corresponding pixels to white when
+Table II. Overall performance comparison
+Data sets
+Metric
+FPMC
+GRU4Rec
+SASRec
+LightSANs
+MIND
+SINE
+GSSE4SR
+Proposed
+Beauty
+HIT@10
+0.0560
+0.0605
+0.0829
+0.0869
+0.0600
+0.0686
+0.0881
+0.0923
+HIT@20
+0.0820
+0.0882
+0.1171
+0.1246
+0.0952
+0.0983
+0.1296
+0.1302
+HIT@50
+0.1314
+0.1390
+0.1766
+0.1891
+0.1581
+0.1573
+0.1907
+0.1939
+NDCG@10
+0.0311
+0.0338
+0.0413
+0.0441
+0.0284
+0.0374
+0.0448
+0.0493
+NDCG@20
+0.0376
+0.0408
+0.0499
+0.0536
+0.0372
+0.0442
+0.0541
+0.0591
+NDCG@50
+0.0473
+0.0508
+0.0617
+0.0664
+0.0496
+0.0543
+0.0665
+0.0719
+Games
+HIT@10
+0.0895
+0.1010
+0.1075
+0.1098
+0.0932
+0.0992
+0.1208
+0.1265
+HIT@20
+0.1376
+0.1553
+0.1674
+0.1685
+0.1425
+0.1453
+0.1838
+0.1905
+HIT@50
+0.2277
+0.2534
+0.2708
+0.2742
+0.2384
+0.2401
+0.2938
+0.3030
+NDCG@10
+0.0464
+0.0532
+0.0531
+0.0543
+0.0496
+0.0515
+0.0547
+0.0621
+NDCG@20
+0.0586
+0.0668
+0.0682
+0.0690
+0.0624
+0.0655
+0.0706
+0.0784
+NDCG@50
+0.0764
+0.0862
+0.0887
+0.0900
+0.0826
+0.0835
+0.0924
+0.1003
+Electronics
+HIT@10
+0.0257
+0.0412
+0.0466
+0.0475
+0.0276
+0.0456
+0.0486
+0.0528
+HIT@20
+0.0387
+0.0602
+0.0678
+0.0689
+0.0428
+0.0641
+0.0691
+0.0765
+HIT@50
+0.0645
+0.0968
+0.1069
+0.1087
+0.0703
+0.1006
+0.1097
+0.1181
+NDCG@10
+0.0137
+0.0228
+0.0248
+0.0257
+0.0158
+0.0236
+0.0261
+0.0287
+NDCG@20
+0.0169
+0.0276
+0.0301
+0.0311
+0.0177
+0.0270
+0.0317
+0.0346
+NDCG@50
+0.0220
+0.0348
+0.0379
+0.0389
+0.0267
+0.0354
+0.0385
+0.0427
+ML-1M
+HIT@10
+0.1786
+0.2938
+0.2954
+0.3021
+0.2137
+0.2994
+0.3108
+0.3199
+HIT@20
+0.2601
+0.3945
+0.3990
+0.4067
+0.3019
+0.3963
+0.4161
+0.4282
+HIT@50
+0.3968
+0.5385
+0.5445
+0.5500
+0.4333
+0.5397
+0.5678
+0.5897
+NDCG@10
+0.0934
+0.1701
+0.1673
+0.1727
+0.1328
+0.1699
+0.1813
+0.1826
+NDCG@20
+0.1139
+0.1955
+0.1935
+0.1991
+0.1406
+0.1933
+0.2079
+0.2096
+NDCG@50
+0.1409
+0.2241
+0.2225
+0.2276
+0.1739
+0.2238
+0.2361
+0.2379
+1402
+IEEJ Trans 19: 1396–1404 (2024)
+ 19314981, 2024, 8, Downloaded from https://onlinelibrary.wiley.com/doi/10.1002/tee.24087 by Chongqing University, Wiley Online Library on [28/10/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+
+PREDICTABILITY-AWARE SUBSEQUENCE MODELING
+0.0
+0.2
+relative score
+0.4
+0.6
+0.8
+1.0
+0.0
+0.0
+0.2
+0.2
+relative score
+0.4
+0.4
+0.6
+0.6
+0.8
+0.8
+1.0
+1.0
+0.0
+0.2
+0.4
+T
+0.6
+0.8
+1.0
+0.0
+0.2
+0.4
+T
+0.6
+0.8
+1.0
+HIT@10
+NDCG@10
+HIT@10
+0.095
+0.090
+0.085
+0.080
+0.075
+0.070
+0.065
+0.048
+0.046
+0.044
+0.042
+0.040
+0.038
+NDCG@10
+dataset
+Beauty
+Games
+Electronics
+ML-1M
+dataset
+Beauty
+Games
+Electronics
+ML-1M
+1
+2
+3
+4
+5
+n_subseq
+1
+2
+3
+4
+5
+n_subseq
+p
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+p
+Fig. 4. Analysis of hyperparameters of the proposed method
+Table III. Effect (HIT@10) of key components
+Model
+Beauty
+Games
+Electronics
+ML-1M
+w/o WL and LOS
+0.0864
+0.1071
+0.0474
+0.3050
+w/o WL
+0.0870
+0.1074
+0.0478
+0.3059
+w/o LOS
+0.0903
+0.1236
+0.0501
+0.3151
+Proposed
+0.0923
+0.1265
+0.0528
+0.3199
+T or p equals 0, as the objective function becomes meaningless in
+that case. Similarly, when T or p equals 1, our method degenerates
+to the original baseline, resulting in the last column and the last
+row having the same values. Notably, we observed that setting p
+to 0 usually results in lower performance compared to other val-
+ues of p with the same T. This suggests that completely removing
+the information about hard items is not optimal, as it is difﬁcult
+to determine whether an item is inherently unpredictable or just
+unpredictable by the model with the available data. The peaks of
+the results occur in the inner area of the square array, indicating
+that setting T or p to extreme values of 0 or 1 is not recommended.
+Furthermore, we found that the values of T and p that result in the
+peaks of NDCG@10 are generally smaller compared to HIT@10.
+This implies that for better NDCG@10 performance, it is beneﬁcial
+to consider a larger portion of items as hard and assign them with
+a clear weight penalty. This is reasonable as NDCG is more sensi-
+tive to the accurate rank of the ground truth items. Therefore, we
+recommend selecting appropriate values of T and p based on the
+speciﬁc performance metrics of interest and the desired trade-offs
+between the precision and recall in the recommendation rankings.
+4.4.
+Ablation study
+In our ablation study, we systemati-
+cally remove key components from our proposed method to discern
+their individual contributions and assess their impact on overall
+performance. The HIT@10 performances of the proposed method,
+with each component omitted, are documented in Table III. Here,
+“w/o WL” denotes the proposed method without the weighted loss.
+“w/o LOS” signiﬁes the proposed method without the leave-out
+strategy. It means that during the assessment of predictability, the
+model is trained on the whole training set directly and tested on the
+same training set to detect the predictability of items. Our ﬁndings
+reveal a noticeable decrease in performance when any one of these
+key components is removed. Notably, the weighted loss emerges
+as a crucial factor, as its absence leads to a signiﬁcant decline in
+performance.
+5.
+Conclusions
+This paper introduces a novel approach to sequential recom-
+mendation systems, aiming to enhance subsequence modeling
+by leveraging the predictability of items. Our proposed method
+employs a leave-out strategy to evaluate the predictability of items
+in the training set. The obtained predictability information is then
+utilized to identify subsequence boundaries and adjust the loss
+functions for items that are challenging or impossible to predict.
+Additionally, our approach incorporates a module designed to
+discover relevant subsequences for individual users. This enables
+downstream sequence models to concentrate on meaningful item
+transitions while disregarding irrelevant ones. We thoroughly
+evaluate the effectiveness of our method across four public data
+sets, consistently outperforming existing alternatives and deliv-
+ering competitive results. Furthermore, we conduct an in-depth
+analysis of the key components of our model to validate their
+efﬁcacy and assess their impact on recommendation performance.
+References
+(1) Bollacker KD, Lawrence S, Giles CL. Citeseer: an autonomous
+web agent for automatic retrieval and identiﬁcation of interesting
+publications. In Proceedings of the Second International Conference
+on Autonomous Agents, ser. AGENTS. Association for Computing
+Machinery: New York, NY, USA; 1998; 116–123. https://doi.org/10
+.1145/280765.280786.
+(2) Beel J, Gipp B, Langer S, Breitinger C. Paper recommender systems:
+A literature survey. International Journal on Digital Libraries 2016;
+17:305–338.
+(3) Zhou B, Zou T. Competing for recommendations: The strategic
+impact of personalized product recommendations in online market-
+places. Marketing Science 2023; 42(2):360–376.
+(4) Jordan MI. Serial order: a parallel distributed processing approach. In
+Advances in Psychology, vol. 121. Elsevier: Amsterdam, Netherlands;
+1997; 471–495.
+(5) Vaswani A, Shazeer N, Parmar N, Uszkoreit J, Jones L, Gomez AN,
+Kaiser Ł, Polosukhin I. Attention is all you need. In Advances in
+Neural Information Processing Systems. Curran Associates Inc: New
+York; 2017; 5998–6008.
+(6) Hidasi B, Karatzoglou A, Baltrunas L, Tikk D. Session-based
+recommendations with recurrent neural networks, in Proceedings of
+the International Conference on Learning Representations (ICLR).
+2016.
+(7) Kang W-C, McAuley J. Self-attentive sequential recommendation. In
+2018 IEEE International Conference on Data Mining (ICDM). IEEE:
+Singapore; 2018; 197–206.
+(8) Fan X, Liu Z, Lian J, Zhao WX, Xie X, Wen J-R. Lighter and
+better: low-rank decomposed self-attention networks for next-item
+recommendation. In Proceedings of the 44th International ACM
+SIGIR Conference on Research and Development in Information
+Retrieval. Association for Computing Machinery: New York, NY;
+2021; 1733–1737.
+(9) Chen H, Lin Y, Pan M, Wang L, Yeh C-CM, Li X, Zheng Y, Wang F,
+Yang H. Denoising self-attentive sequential recommendation. In
+Proceedings of the 16th ACM Conference on Recommender Systems,
+1403
+IEEJ Trans 19: 1396–1404 (2024)
+ 19314981, 2024, 8, Downloaded from https://onlinelibrary.wiley.com/doi/10.1002/tee.24087 by Chongqing University, Wiley Online Library on [28/10/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+
+H. DENG, AND J. HU
+ser. RecSys 2022. Association for Computing Machinery: New York,
+NY; 2022; 92–101. https://doi.org/10.1145/3523227.3546788.
+(10) Rendle S, Freudenthaler C, Schmidt-Thieme L. Factorizing personal-
+ized markov chains for next-basket recommendation. In Proceedings
+of the 19th International Conference on World Wide Web. Association
+for Computing Machinery: New York, NY; 2010; 811–820.
+(11) Sun F, Liu J, Wu J, Pei C, Lin X, Ou W, Jiang P. Bert4rec:
+sequential recommendation with bidirectional encoder representations
+from transformer. In Proceedings of the 28th ACM International
+Conference on Information and Knowledge Management. Association
+for Computing Machinery: New York, NY; 2019; 1441–1450.
+(12) Devlin J, Chang M-W, Lee K, Toutanova K. BERT: pre-training of
+deep bidirectional transformers for language understanding. In Pro-
+ceedings of the 2019 Conference of the North American Chapter of the
+Association for Computational Linguistics: Human Language Tech-
+nologies, Volume 1 (Long and Short Papers). Association for Com-
+putational Linguistics: Minneapolis, Minnesota; 2019; 4171–4186.
+(13) Li C, Liu Z, Wu M, Xu Y, Zhao H, Huang P, Kang G,
+Chen Q, Li W, Lee DL. Multi-interest network with dynamic
+routing for recommendation at tmall. In Proceedings of the 28th
+ACM International Conference on Information and Knowledge Man-
+agement. Association for Computing Machinery: New York, NY;
+2019; 2615–2623.
+(14) Sabour S, Frosst N, Hinton GE. Dynamic routing between capsules.
+Advances in Neural Information Processing Systems 2017; 30:1–11.
+(15) Tan Q, Zhang J, Yao J, Liu N, Zhou J, Yang H, Hu X. Sparse-interest
+network for sequential recommendation. In Proceedings of the 14th
+ACM International Conference on Web Search and Data Mining, ser.
+WSDM 2021. Association for Computing Machinery: New York, NY;
+2021; 598–606. https://doi.org/10.1145/3437963.3441811.
+(16) Deng H, Hu J. Improving sequential recommendation with global
+item transitions and local subsequences. IEEJ Transactions on Elec-
+trical and Electronic Engineering 2023; 19:100–108.
+(17) Zhou K, Wang H, Zhao WX, Zhu Y, Wang S, Zhang F, Wang Z,
+Wen J. S3-rec: self-supervised learning for sequential recommenda-
+tion with mutual information maximization. In CIKM ’20: The 29th
+ACM International Conference on Information and Knowledge Man-
+agement, Virtual Event, Ireland, October 19–23, 2020. ACM: New
+York; 2020; 1893–1902.
+(18) McAuley J, Targett C, Shi Q, Van Den Hengel A. Image-based
+recommendations on styles and substitutes. In In Proceedings of
+the 38th International ACM SIGIR Conference on Research and
+Development in Information Retrieval. ACM: New York; 2015;
+43–52.
+(19) Harper FM, Konstan JA. The movielens datasets: History and context.
+ACM Transactions on Interactive Intelligent Systems (TIIS) 2015;
+5(4):1–19.
+(20) Wang X, Guo Y, Xu C. Recommendation algorithms for optimizing
+hit rate, user satisfaction and website revenue. In Twenty-Fourth
+International Joint Conference on Artiﬁcial Intelligence, Burlington,
+CA. 2015.
+(21) Wang Y, Wang L, Li Y, He D, Liu T-Y. A theoretical analysis of ndcg
+type ranking measures. In Conference on Learning Theory. PMLR:
+Cambridge, MA; 2013; 25–54.
+(22) Krichene W, Rendle S. On sampled metrics for item recommendation.
+In Proceedings of the 26th ACM SIGKDD International Conference
+on Knowledge Discovery & Data Mining. Association for Computing
+Machinery: New York, NY; 2020; 1748–1757.
+(23) Chung J, Gulcehre C, Cho K, Bengio Y. Empirical evaluation of
+gated recurrent neural networks on sequence modeling, NIPS 2014
+Deep Learning and Representation Learning Workshop. 2014.
+(24) Zhao WX, Mu S, Hou Y, Lin Z, Chen Y, Pan X, Li K, Lu Y,
+Wang H, Tian C, Min Y, Feng Z, Fan X, Chen X, Wang P, Ji W,
+Li Y, Wang X, Wen J. Recbole: towards a uniﬁed, comprehensive and
+efﬁcient framework for recommendation algorithms. In Conference
+on Information and Knowledge Management. ACM: New York;
+2021; 4653–4664.
+Hangyu Deng (Non-member) received the B.E. degree in software
+engineering from Nanjing University, China,
+in 2016, received M.E. degree in software
+engineering
+from
+Nanjing
+University,
+China, in 2018, and received M.E. degree
+from Waseda University, Japan, in 2019.
+Since April 2019, he has been pursuing the
+Ph.D. degree at Waseda University, Japan.
+His research interests include data mining,
+relational reasoning and recommender systems.
+Jinglu Hu (Member) received the M.Sci degree in Electronic Engi-
+neering from Sun Yat-Sen University, China
+in 1986, and a Ph.D degree in Computer Sci-
+ence and System Engineering from Kyushu
+Institute of Technology, Japan. From 1986
+to 1993, he worked as a Research Associate
+and then Lecturer at Sun Yat-Sen University.
+From 1997 to 2003, he worked as a Research
+Associate at Kyushu University. From 2003
+to 2008, he worked as an Associate Professor and Since April
+2008, he has been a Professor at Graduate School of Information,
+Production and Systems of Waseda University. His research inter-
+ests include Computational Intelligence such as neural networks
+and genetic algorithms, and their applications to system modeling
+and identiﬁcation, bioinformatics, time series prediction, and so
+on. Dr. Hu is a member of IEEE, IEEJ, SICE, and IEICE.
+1404
+IEEJ Trans 19: 1396–1404 (2024)
+ 19314981, 2024, 8, Downloaded from https://onlinelibrary.wiley.com/doi/10.1002/tee.24087 by Chongqing University, Wiley Online Library on [28/10/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License

@@ -1,0 +1,6175 @@
+Pay Attention to Sequence Split: Uncovering the Impacts of
+Sub-Sequence Splitting on Sequential Recommendation Models
+Yizhou Dang
+Software College, Northeastern
+University
+Shenyang, China
+dangyz@mails.neu.edu.cn
+Yifan Wu
+Software College, Northeastern
+University
+Shenyang, China
+wuyf4@mails.neu.edu.cn
+Minhan Huang
+Software College, Northeastern
+University
+Shenyang, China
+huangmh2@mails.neu.edu.cn
+Chuang Zhao
+Tianjin University
+Tianjin, China
+zhaochuang@tju.edu.cn
+Lianbo Ma
+Software College, Northeastern
+University
+Shenyang, China
+malb@swc.neu.edu.cn
+Guibing Guo∗
+Software College, Northeastern
+University
+Shenyang, China
+guogb@swc.neu.edu.cn
+Xingwei Wang∗
+School of Computer Science and
+Engineering, Northeastern University
+Shenyang, China
+wangxw@mail.neu.edu.cn
+Zhu Sun
+Information Systems Technology and
+Design, Singapore University of
+Technology and Design
+Singapore, Singapore
+sunzhuntu@gmail.com
+Abstract
+Sub-sequence splitting (SSS) has been demonstrated as an effective
+approach to mitigate data sparsity in sequential recommendation
+(SR) by splitting a raw user interaction sequence into multiple
+sub-sequences. Previous studies have demonstrated its ability to
+enhance the performance of SR models significantly. However, in
+this work, we discover that (i). SSS may interfere with the eval-
+uation of the model’s actual performance. We observed that
+many recent state-of-the-art SR models employ SSS during the
+data reading stage (not mentioned in the papers). When we re-
+moved this operation, performance significantly declined, even
+falling below that of earlier classical SR models. The varying im-
+provements achieved by SSS and different splitting methods across
+different models prompt us to analyze further when SSS proves
+effective. We find that (ii). SSS demonstrates strong capabili-
+ties only when specific splitting methods, target strategies,
+and loss functions are used together. Inappropriate combina-
+tions may even harm performance. Furthermore, we analyze why
+sub-sequence splitting yields such remarkable performance gains
+and find that (iii). it evens out the distribution of training
+data while increasing the likelihood that different items are
+targeted. Finally, we provide suggestions for overcoming SSS in-
+terference, along with a discussion on data augmentation methods
+and future directions. We hope this work will prompt the broader
+∗Corresponding authors.
+This work is licensed under a Creative Commons Attribution-NonCommercial-
+NoDerivatives 4.0 International License.
+SIGIR ’26, Melbourne, VIC, Australia
+© 2026 Copyright held by the owner/author(s).
+ACM ISBN 979-8-4007-2599-9/2026/07
+https://doi.org/10.1145/3805712.3808548
+community to re-examine the impact of data splitting on SR and
+promote fairer, more rigorous model evaluation. All analysis code
+and data are available at https://github.com/KingGugu/SSS4SR.
+CCS Concepts
+• Information systems →Recommender systems.
+Keywords
+Sequential Recommendation; Sub-Sequence Splitting; Data Aug-
+mentation; Reproducibility Study
+ACM Reference Format:
+Yizhou Dang, Yifan Wu, Minhan Huang, Chuang Zhao, Lianbo Ma, Guib-
+ing Guo, Xingwei Wang, and Zhu Sun. 2026. Pay Attention to Sequence
+Split: Uncovering the Impacts of Sub-Sequence Splitting on Sequential Rec-
+ommendation Models. In Proceedings of the 49th International ACM SIGIR
+Conference on Research and Development in Information Retrieval (SIGIR
+’26), July 20–24, 2026, Melbourne, VIC, Australia. ACM, New York, NY, USA,
+12 pages. https://doi.org/10.1145/3805712.3808548
+1
+Introduction
+Sequential recommendation learns user preferences from their his-
+torical interaction sequences and generates personalized sugges-
+tions [9, 23, 26, 32]. Over the past several years, numerous SR mod-
+els based on different architectures have been proposed, achieving
+remarkable progress [9, 16, 81, 94]. However, most users tend to
+interact with only a small number of items on the platform, while
+most items receive very few interactions [13, 15, 78]. Consequently,
+the widespread data sparsity limits the models’ performance. To
+tackle this, researchers proposed many effective data augmentation
+(DA) methods to generate additional training data [11, 41, 42, 48].
+Data augmentation alleviates data sparsity by perturbing origi-
+nal data or directly generating new samples [59, 61]. Research in
+2856
+注意序列分割：揭示子序列分割对序列推荐模型的影响
+东北大学沈阳Yizhou
+Dang软件学院，中国
+dangyz
+@mails.neu.edu.cn
+东北大学沈阳Yifan
+Wu软件学院，中国
+wuyf4@mails.neu.edu.cn
+东北大学沈阳Minhan
+Huang软件学院，中国
+h
+uangmh2@mails.neu.edu.cn
+天津大学天津
+ChuangZhao，中国
+zhaochuang@tju.edu.cn
+东北大学沈阳Lianbo
+Ma软件学院，中国
+malb@swc.neu.edu.cn
+郭桂兵∗软件学院，东北
+大学沈阳，中国
+guogb@swc.neu.edu.cn
+王兴伟∗计算机科学与工程学院，
+东北大学沈阳，中国
+wangxw@mail.neu.edu.cn
+孙珠
+信息系统技术与设计，新加坡技术
+设计大学新加坡，新加坡
+sunzhuntu@gmail.com
+摘要
+子序列拆分（SSS）已被证明是一种有效的方法，通过将原始
+用户交互序列拆分为多个子序列来缓解序列推荐（SR）中的
+数据稀疏性问题。先前研究表明，它能够显著提升SR模型的
+性能。然而，在这项工作中，我们发现(i).SSS可能会干扰对
+模型实际性能的评估。我们观察到许多最近的顶尖SR模型在
+数据读取阶段采用了SSS（论文中未提及）。当我们移除这一
+操作时，性能显著下降，甚至低于早期的经典SR模型。SSS
+在不同模型中实现的改进程度以及不同的拆分方法促使我们
+进一步分析SSS何时有效。我们发现(ii).只有当特定的拆分
+方法、目标策略和损失函数结合使用时，SSS才能展现出强大
+的能力。不合适的组合甚至可能损害性能。此外，我们分析
+了子序列拆分为何能取得如此显著的性能提升，发现(iii).它
+使训练数据的分布更加均匀，同时增加了不同物品被目标的
+可能性。最后，我们提供了克服SSS干扰的建议，并讨论了数
+据增强方法和未来方向。我们希望这项工作能促使更广泛的
+∗通讯作者。
+本工作根据知识共享署名‑非商业性使用‑禁止演绎4.0国际许可协议进行许可。
+SIGIR'26，墨尔本，维多利亚州，澳大利亚©2026版权所有者/作者。
+ACMISBN979‑8‑4007‑2599‑9/2026/07
+https://doi.org/10.1145/3805712.3808548
+社区将重新审视数据分割对SR的影响，并促进更公平、更严格的模
+型评估。所有分析代码和数据均可在
+https://github.com/KingGugu/SSS4SR获取。
+CCS概念
+• 信息系统→推荐系统。
+关键词
+序列推荐；子序列分割；数据增强；可复现性研究
+ACM参考格式：
+dangyizhou,wuyifan,huangminhan,zhaochuang,mali
+anbo,guoguibing,wangxingwei,和sunzhu.2026.注意序列分
+割：揭示子序列分割对序列推荐模型的影响.在第49届国际ACM
+SIGIR信息检索研究与发展会议论文集(SIGIR'26)中,2026年7
+月20–24日,墨尔本,澳大利亚维多利亚州.ACM,纽约,美国纽约,
+12页.https://doi.org/10.1145/3805712.3808548
+1引言
+序列推荐从用户的历史交互序列中学习用户偏好，并生成个
+性化推荐 [9, 23, 26, 32]。在过去的几年里，基于不同架构的众
+多序列推荐(SR)模型已被提出，取得了显著进展
+[9, 16, 81, 94]。然而，大多数用户倾向于在平台上只与少量物
+品交互，而大多数物品收到的交互非常少 [13, 15, 78]。因此，
+普遍的数据稀疏性限制了模型的性能。为了解决这个问题，
+研究人员提出了许多有效的数据增强(DA)方法来生成额外的
+训练数据 [11, 41, 42, 48]。
+数据增强通过扰动原始数据或直接生成新样本[59, 61]来缓解数
+据稀疏问题。
+2856
+
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+Yizhou Dang, et al.
+SASRec
+Models
+Performance
+(Beauty HR@10)
+Original Data
+�1
+�2
+�3
+�4
+�5
+�1
+�2
+�3
+�4
+�5
+BSARec
+SR Models
+(a).        Normal
+(b).    Outstanding
+�1
+�2
+�3
+�4
+�5
+�1
+�2
+�3
+�4
+�1
+�2
+�3
+�1
+�2
+BSARec
+�1
+�2
+�3
+�4
+�5
+S S S i s e m p l o y e d d u r i n g d a t a 
+processing stage, but it is not 
+mentioned in the paper. It may be 
+inherited from other code pipelines.
+(c).         Normal
+General
+Process
+SSS
+(Original Code)
+(a)
+(b)
+(c)
+Remove
+SSS
+SSS interferes with the 
+evaluation of the model's 
+actual performance.
+Model Performance
+Significant Decline
+0.0580
+0.0987
+0.0569
+Figure 1: An example of SSS interferes with model evaluation.
+this area can be broadly categorized into two types: the first in-
+volves heuristic operations based on rules and human prior knowl-
+edge, such as sub-sequence splitting (also known as sliding win-
+dows) [33, 63], which split one original sequence into many sub-
+sequences (e.g., [1, 2, 3, 4] →{[1, 2], [1, 2, 3], [1, 2, 3, 4]}), dropout
+[62], cropping [71], masking [71], and insert [47]. The second cat-
+egory comprises methods that leverage learnable augmentation
+modules, such as extending short sequences with bidirectional
+transformers [25, 48], replacing items by counterfactual thinking
+[67], and directly generating new sequences with diffusion models
+[42, 68]. Although DA methods are intended to better facilitate
+model learning of user preferences and improve accuracy, we find
+that sub-sequence splitting, one of the earliest proposed and proven-
+effective DA methods [95], may not have been applied appropriately
+in many recent SR models. This problem has led to widespread is-
+sues, including misjudged performance and unfair evaluations.
+(i). SSS Interferes with Model Evaluation. (Section 3) Through an
+empirical study conducted on many SR models recently published
+in top-tier venues, we reveal that Sub-sequence splitting may
+interfere with our evaluation of the SR models’ actual per-
+formance. As shown in Figure 1, we find that many recently pro-
+posed representative SR models employed SSS during data reading
+without acknowledging it in their papers. When we removed their
+SSS operations, the models’ performance significantly deteriorated.
+Among the ten models we investigated, seven experienced perfor-
+mance drops exceeding 40%. Some models even underperformed
+the classic model SASRec without any data augmentation [26]. This
+result indicates that SSS interfered with researchers’ accurate and
+rigorous evaluation of model performance. The additional perfor-
+mance gains it introduced led to an unfair comparison. Through
+investigation, we discover that this phenomenon likely stems from
+an earlier representative SR model that incorporated SSS into its
+code pipeline without mentioning it [94]. Subsequently, many re-
+searchers implemented their own models on this pipeline. Only a
+handful of researchers detected the SSS and removed it.
+(ii). When is SSS Effective? (Section 4) Furthermore, we observed
+that SSS yields varying degrees of improvement across different
+models. Given differences in loss functions (cross-entropy and
+binary cross-entropy), target strategies (single-target and multi-
+target), and splitting methods (prefix splitting, suffix splitting, and
+sliding window) across these models, we further explored the condi-
+tions under which SSS achieves its maximum effectiveness. Through
+experiments on the four most representative and influential SR
+models with real-world datasets, we find that SSS demonstrates
+strong capabilities only when specific splitting methods, tar-
+get strategies, and loss functions are used together. Perfor-
+mance differences under the same model with different settings are
+significant. We also find that when employing appropriate settings,
+the early classical SR model, SASRec, can achieve performance com-
+parable to recently proposed SR models. This observation further
+validates the findings in (i), namely that SSS interferes with our
+evaluation of the actual performance of the SR model.
+(iii). Why is SSS Effective? (Section 5) Inspired by previous research
+on data augmentation [6, 33], we analyze why sub-sequence split-
+ting yields such remarkable performance gains and find that it
+evens out the distribution of training data while increasing
+the likelihood that different items are targeted. After adopting
+the sub-sequence splitting approach, both the absolute frequency
+and probability of low-frequency and less popular items being in-
+cluded in training increased. This enables the model to learn more
+accurate and comprehensive item representations.
+Discussions. (Section 6) Based on the above analysis, we provide
+practical suggestions for overcoming SSS interference. When im-
+plementing and evaluating SR models, we should ensure that data
+splitting is applied consistently across all models. We can also
+choose to comprehensively evaluate the model across different set-
+tings. Additionally, we provide discussions for developing more
+effective DA methods, the impacts of this work beyond SR, and
+future directions. All analysis code and data will be made available
+upon acceptance. We provide a simple, anonymous implementation
+at https://anonymous.4open.science/r/SSS_Review-45C3.
+2
+Preliminaries
+2.1
+Problem Formulation
+Suppose we have user set U and item set V. Each user 𝑢∈U
+is associated with a sequence of interacted items in chronological
+order 𝑠𝑢= [𝑣1, . . . , 𝑣𝑗, . . . , 𝑣|𝑠𝑢|], where 𝑣𝑗∈V indicate the item
+that user𝑢has interacted with at time step 𝑗and |𝑠𝑢| is the sequence
+length. Given the sequences of interacted items 𝑠𝑢, sequential rec-
+ommendation aims to accurately predict the most possible item 𝑣∗
+that user 𝑢will interact with at time step |𝑠𝑢| + 1, formulated as:
+arg max
+𝑣∗∈V
+𝑃 𝑣|𝑠𝑢|+1 = 𝑣∗| 𝑠𝑢
+ .
+(1)
+This equation can be interpreted as calculating the probability of all
+candidate items and selecting the highest one for recommendation.
+2.2
+Sub-Sequence Splitting
+Existing studies typically employ the leave-one-out strategy, wherein
+the last item of each sequence serves as the test data, the items pre-
+ceding it as validation data, and the remaining data as training data
+[26, 33, 94]. We refer to the training data obtained by leave-one-out
+strategy as the original sequence 𝑠𝑢, and the sub-sequence splitting
+is also performed on this training data. Given a raw sequence, the
+following three common splitting methods exist:
+Prefix Splitting. It starts from the first interaction 𝑣1 in the original
+sequence 𝑠𝑢and divides the sequence into all possible lengths of
+2857
+SIGIR’26，2026年7月20日至24日，墨尔本，澳大利亚维多利亚州
+党一舟等
+SASRec
+模型
+性能
+(美度HR@10)
+原始数据
+�1
+�2
+�3
+�4
+�5
+�1
+�2
+�3
+�4
+�5
+BSARec
+序列推荐模型
+(a).正常
+(b).优秀
+�1
+�2
+�3
+�4
+�5
+1
+2
+3
+4
+1
+2
+3
+1
+2
+BSARec
+�1
+�2
+�3
+�4
+�5
+数据阶段采用SSS
+处理阶段，但它不是
+在论文中提到。它可能是
+继承自其他代码管道。
+(c).正常
+通用
+流程
+SSS
+(原始代码)
+(a)
+(b)
+(c)
+删除
+SSS
+SSS会干扰
+模型的
+实际性能评估。
+模型性能
+0.0580
+0.0987
+0.0569
+图1：SSS干扰模型评估的示例。
+该领域的研究可分为两大类：第一类基于规则和人类先验知识，
+采用启发式操作，如子序列分割（也称为滑动窗口）[33, 63], ，
+将一个原始序列分割成多个子序列（例如，[1, 2, 3, 4] →{
+[1, 2], [1, 2, 3], [1, 2, 3, 4]}），包括dropout[62], 、裁剪 [71], 、
+掩码 [71], 和插入 [47]。第二类方法利用可学习的增强模块，
+如使用双向Transformer扩展短序列[25, 48],、通过反事实思
+维替换项目[67], 以及使用扩散模型直接生成新序列[42, 68]。尽
+管数据增强方法旨在更好地促进模型学习用户偏好并提高准确
+性，我们发现子序列分割作为最早提出且被证明有效的数据增
+强方法之一[95], ，在许多最近的序列推荐模型中可能没有得
+到恰当应用。这个问题导致了广泛的问题，包括误判性能和不
+公平的评估。
+(i).SSS干扰模型评估。(第3节)通过实证研究，我们对近期发
+表在顶级会议上的多种序列推荐模型进行了分析，揭示子序列
+分割可能干扰我们对序列推荐模型实际性能的评估。如图1所
+示，我们发现许多近期提出的代表性序列推荐模型在数据读取
+时采用了SSS，但在论文中并未提及。当我们移除这些模型的
+SSS操作后，其性能显著下降。在我们研究的十种模型中，有
+七种的性能下降幅度超过40%。一些模型的性能甚至低于未经
+数据增强的经典模型SASRec [26]。这一结果表明，SSS干扰了
+研究人员对模型性能的准确和严谨评估。它带来的额外性能提
+升导致了不公平的比较。通过调查，我们发现这一现象可能源
+于一个早期代表性序列推荐模型，该模型将其代码流程中加入
+了SSS，但未提及[94]。随后，许多研究人员基于此流程构建
+了自己的模型。只有少数研究人员发现了SSS并将其移除。
+(ii).何时SSS有效？（第4节）此外，我们观察到SSS在不同模型中产生了不同程度
+的改进。考虑到这些模型在损失函数（交叉熵和二元交叉熵）、目标策略（单目标和多
+目标）以及分割方法（前缀分割、后缀分割和滑动窗口）上的差异，我们进一步探索了
+SSS在何种条件下能达到最大有效性。通过对四个最具代表性和影响力的序列推荐模型
+在真实世界数据集上进行实验，我们发现只有当特定的分割方法、目标策略和损失函数
+组合使用时，SSS才能展现出强大的能力。同一模型在不同设置下的性能差异显著。我
+们还发现，在采用适当的设置时，早期的经典序列推荐模型SASRec可以达到与最近提
+出的序列推荐模型相当的性能。这一观察进一步验证了(i)中的发现，即SSS干扰了我
+们对序列推荐模型实际性能的评估。
+我们发现在真实世界数据集上对四个最具代表性和影响力的序列
+推荐模型进行实验时，只有当特定的分割方法、目标策略和损失
+函数组合使用时，SSS才能展现出强大的能力。同一模型在不同
+设置下的性能差异显著。我们还发现，在采用适当的设置时，早
+期的经典序列推荐模型SASRec可以达到与最近提出的序列推荐
+模型相当的性能。这一观察进一步验证了(i)中的发现，即SSS
+干扰了我们对序列推荐模型实际性能的评估。
+(iii).为什么SSS有效？（第5节）受先前关于数据增强
+[6, 33],研究的启发，我们分析了子序列拆分为何能带来如此
+显著的性能提升，发现它使训练数据的分布更加均衡，同时增
+加了不同物品被目标化的可能性。采用子序列拆分方法后，低
+频次和不受欢迎物品在训练中出现的绝对频率和概率均有所增
+加。这使得模型能够学习到更准确和全面的物品表示。
+讨论。(第6节)基于以上分析，我们为克服SSS干扰提供了实用
+建议。在实现和评估SR模型时，我们应该确保所有模型都一
+致地应用数据分割。我们还可以选择在不同设置下全面评估模
+型。此外，我们提供了关于开发更有效的DA方法、这项工作
+对SR之外的影响以及未来方向的讨论。所有分析代码和数据
+将在接受后公开。我们在
+https://anonymous.4open.science/r/SSS_Review‑45C3提
+供了简单的匿名实现。
+2.预备知识
+2.1问题公式化
+假设我们有一个用户集U和物品集V。每个用户𝑢∈U都与一
+个按时间顺序排列的交互物品序列𝑠𝑢= [𝑣1, . . . , 𝑣𝑗, . . . , 𝑣|𝑠𝑢|]相
+关联，其中𝑣𝑗∈V表示用户𝑢在时间步长𝑗交互的物品，|𝑠𝑢|
+是序列长度。给定交互物品序列𝑠𝑢，序列推荐旨在准确预测
+用户𝑢在时间步长|𝑠𝑢| + 1最可能交互的物品𝑣∗，公式化为：
+arg max
+𝑣∗∈V
+𝑃 𝑣|𝑠𝑢|+1 = 𝑣∗| 𝑠𝑢
+ .
+(1)
+该公式可以解释为计算所有候选物品的概率，并选择概率最高的
+物品进行推荐。
+2.2子序列分割
+现有研究通常采用留一法策略，其中每个序列的最后一个物品
+作为测试数据，之前的物品作为验证数据，剩余数据作为训练
+数据[26, 33, 94]。我们将通过留一法策略获得的训练数据称为
+原始序列𝑠𝑢，子序列分割也在此训练数据上执行。给定一个原
+始序列，存在以下三种常见的分割方法：
+前缀分割。它从原始序列𝑣1 中的第一个交互𝑠𝑢开始，将序列分
+割成所有可能的连续子序列长度。
+2857
+
+Pay Attention to Sequence Split: Uncovering the Impacts of Sub-Sequence Splitting
+on Sequential Recommendation Models
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+contiguous sub-sequences. This process can be formulate as:
+n
+𝑠1:2
+𝑢,𝑠1:3
+𝑢, . . . ,𝑠1:|𝑠𝑢|
+𝑢
+o
+= Prefix-SSS (𝑠𝑢) ,
+(2)
+where𝑠𝑖:𝑗
+𝑢= [𝑣𝑖, 𝑣𝑖+1, . . . , 𝑣𝑗]. After the prefix SSS, we can obtain |𝑠𝑢|
+sub-sequences. For example, given an original sequence [1, 2, 3, 4],
+the sub-sequences after refix splitting are {[1, 2], [1, 2, 3], [1, 2, 3, 4]}.
+Suffix Splitting. It starts from the last interaction 𝑣|𝑠𝑢| in the orig-
+inal sequence 𝑠𝑢and divides the sequence into all possible lengths
+of contiguous sub-sequences. This process can be formulate as:
+n
+𝑠|𝑠𝑢|−1:|𝑠𝑢|
+𝑢
+,𝑠|𝑠𝑢|−2:|𝑠𝑢|
+𝑢
+, . . . ,𝑠1:|𝑠𝑢|
+𝑢
+o
+= Suffix-SSS (𝑠𝑢) .
+(3)
+We can also obtain |𝑠𝑢| sub-sequences after the suffix splitting. For
+example, given original sequence [1, 2, 3, 4], the sub-sequences after
+suffix splitting are {[3, 4], [2, 3, 4], [1, 2, 3, 4]}.
+Sliding Window. Given a window length𝑇and𝑇< |𝑠𝑢|, it divides
+the original sequence into multiple sub-sequences by sliding a
+window from one end to the other [63]:
+n
+𝑠1:𝑇
+𝑢,𝑠2:𝑇+1
+𝑢
+, . . . ,𝑠|𝑠𝑢|−𝑇+1:|𝑠𝑢|
+𝑢
+o
+= Sliding-SSS (𝑠𝑢,𝑇) .
+(4)
+For example, given original sequence [1, 2, 3, 4, 5] with 𝑇= 3, the
+sub-sequences after suffix splitting are {[1, 2, 3], [2, 3, 4], [3, 4, 5]}.
+2.3
+Target Strategy
+There are two commonly used training target strategies in SR.
+Single-Target Strategy. It treats the last item in each sequence
+as the target for prediction during training. Therefore, it can also
+be referred to as the last-target strategy. For each user 𝑢∈U, the
+input is all but the last item, and the target is the last item [33]:
+𝑥𝑢=
+
+𝑣1, . . . , 𝑣|𝑠𝑢|−1
+
+,
+𝑦𝑢= 𝑣|𝑠𝑢|.
+(5)
+The resulting training set for user 𝑢is Dtrain
+𝑢
+= {(𝑥𝑢,𝑦𝑢)}.
+Multi-Target Strategy. It predicts multiple targets within each
+sequence. For each position 𝑘∈{2, . . . , |𝑠𝑢|}, the first 𝑘−1 items
+are used as the input and the 𝑘th item as the target [33]:
+𝑥𝑘
+𝑢= [𝑣1, . . . , 𝑣𝑘−1] ,
+𝑦𝑘
+𝑢= 𝑣𝑘.
+(6)
+This produces |𝑠𝑢| −1 input-target pairs for each user sequence:
+Dtrain
+𝑢
+=
+n
+𝑥𝑘
+𝑢,𝑦𝑘
+𝑢
+
+|2 ≤𝑘≤|𝑠𝑢|} .
+(7)
+When 𝑘equals only |𝑠𝑢|, the multi-target strategy degenerates into
+a single-target strategy. The multi-target strategy provides more
+supervision signals from earlier positions in the sequence. It should
+be noted that prefix splitting and the multi-target strategy are
+orthogonal. The former involves splitting the original sequence
+into multiple sub-sequences, while the latter refers to a training
+strategy applied to a single sequence.
+3
+Effects of Sub-Sequence Splitting
+In this section, we present empirical research demonstrating how
+SSS influences evaluation of SR models’ actual performance.
+Table 1: Statistical data for the papers we investigated.
+SSS is not used
+SSS is used
+Mentioned in the Paper
+Not Mentioned in the Paper
+6 papers
+1 paper
+10 papers
+[17] [19] [50]
+[69]
+[94] [37] [40] [58] [2]
+[73] [85] [46]
+[45] [22] [57] [20] [72]
+3.1
+Identification of SR Models
+To avoid cherry-picking individual models in our study, we sys-
+tematically scan the proceedings of scientific conferences and jour-
+nal publications using an approach similar to the previous works
+[18, 56]. Specifically, we include papers in our analysis that ap-
+peared between 2022 and 20261 in the following eight conference
+series: KDD, SIGIR, WWW, NeurIPS, AAAI, WSDM, CIKM, and Rec-
+Sys2. The journals include TOIS and TKDE. In the conferences and
+journals, we screened papers according to the following criteria:
+• The paper focuses on Classic sequential recommendation, which
+is the primary direction of our investigation in this work. Subdo-
+mains such as cross-domain SR [88, 90], multi-modal SR [3], and
+multi-behavior SR [70], etc., will not be considered.
+• The primary contribution of the paper is the proposal of a foun-
+dational architecture or backbone for SR. Papers that primarily
+introduce auxiliary tasks (such as contrastive learning [47, 71],
+reconstruction tasks [77, 79], alignment tasks [36]) or propose
+other data augmentation methods will be excluded [14, 42]3. This
+condition is designed to eliminate contributions from other auxil-
+iary modules and tasks to the model’s final performance, thereby
+rigorously assessing the impact of SSS on performance.
+• Providing publicly available codes for reproduction. If these codes
+are not already publicly available, we contacted all paper authors
+and waited 30 days for a response. We select reproducible code
+based on the conditions established in previous work [18], i.e.,
+either a working version of the source code is available or the code
+only needs to be modified in minimal ways to work correctly.
+Applying the above criteria yielded 17 papers. It should be noted
+that we focus on the impact of SSS on evaluating the actual per-
+formance of the model. Therefore, reproducibility studies on how
+many papers provide or do not provide code, or whether they pro-
+vide complete code, are not within the scope of our discussion.
+We conduct a thorough review and examination of the complete
+texts, appendices, and publicly available code of these 17 papers to
+determine whether they indicate the use of SSS in their papers or
+employ it in their code. The results are presented in Table 1. We also
+give a real code example of using SSS during data reading phase
+in Algorithm 1. We observe that 6 papers make no mention of SSS
+and do not utilize it in their code. Among the 11 papers employing
+SSS, only 1 explicitly incorporates SSS as part of its methodology
+and analyzes it in an ablation study. The remaining ten papers use
+SSS in their code but fail to mention it in either the main text or
+the appendices. After carefully re-examining the code in these ten
+1To enhance the timeliness of our research, we include conferences scheduled for 2026
+but have already made their acceptance lists available.
+2All of the conferences are either considered A* or A in the Australian Core Ranking.
+3Some studies employed the open-source framework RecBole [92] for experimentation.
+However, according to RecBole’s official documentation, it enables data augmentation
+by default. To ensure more rigorous and fair analysis, these papers are also excluded.
+2858
+注意序列分割：揭示子序列分割对序列推荐模型的影响
+SIGIR’26，2026年7月20日至24日，墨尔本，维多利亚州，澳大利亚
+这个过程可以表示为：
+n
+𝑠1:2
+𝑢,𝑠1:3
+𝑢, . . . ,𝑠1:|𝑠𝑢|
+𝑢
+o
+= Prefix-SSS (𝑠𝑢) ,
+(2)
+在𝑠𝑖:𝑗
+𝑢= [𝑣𝑖, 𝑣𝑖+1, . . . , 𝑣𝑗]处。在前缀SSS后，我们可以获得 |𝑠𝑢|个
+子序列。例如，给定原始序列 [1, 2, 3, 4],，在重新固定分割后，子序
+列为{[1, 2], [1, 2, 3], [1, 2, 3, 4]}。
+后缀分割。它从原始序列𝑣|𝑠𝑢| 中的最后一个交互 𝑠𝑢开始，并
+将序列分割成所有可能的连续子序列长度。这个过程可以表示为：
+n
+𝑠|𝑠𝑢|−1:|𝑠𝑢|
+𝑢
+,𝑠|𝑠𝑢|−2:|𝑠𝑢|
+𝑢
+, . . . ,𝑠1:|𝑠𝑢|
+𝑢
+o
+= Suffix-SSS (𝑠𝑢) .
+(3)
+我们也可以在后缀分割后获得 |𝑠𝑢| 个子序列。例如，给定原始序列
+[1, 2, 3, 4], ，在后缀分割后的子序列为{[3, 4], [2, 3, 4], [1, 2, 3, 4]}。
+滑动窗口。给定窗口长度𝑇和𝑇< |𝑠𝑢|，它通过从一端滑动
+窗口到另一端 [63]将原始序列分成多个子序列：
+n
+𝑠1:𝑇
+𝑢,𝑠2:𝑇+1
+𝑢
+, . . . ,𝑠|𝑠𝑢|−𝑇+1:|𝑠𝑢|
+𝑢
+o
+= Sliding-SSS (𝑠𝑢,𝑇) .
+(4)
+例如，给定原始序列 [1, 2, 3, 4, 5] 和 𝑇= 3，后缀拆分后的子序
+列是{[1, 2, 3], [2, 3, 4], [3, 4, 5]}。
+2.3目标策略
+在SR中，有两种常用的训练目标策略。
+单目标策略。它将每个序列中的最后一个项目视为训练期间预测的目
+标。因此，它也可以称为末尾目标策略。对于每个用户 𝑢∈U，输入
+是除最后一个项目之外的所有项目，目标是最后一个项目 [33]：
+𝑥𝑢=
+
+𝑣1, . . . , 𝑣|𝑠𝑢|−1
+
+,
+𝑦𝑢= 𝑣|𝑠𝑢|.
+(5)
+用户 𝑢生成的训练集是Dtrain
+𝑢
+= {(𝑥𝑢,𝑦𝑢)}。
+多目标策略。它预测每个序列中的多个目标。对于每个位置 𝑘∈{
+2,..., |𝑠𝑢|}，前 𝑘−1 个项目被用作输入，而 𝑘th 项目作为目标
+[33]：
+𝑥𝑘
+𝑢= [𝑣1, . . . , 𝑣𝑘−1] ,
+𝑦𝑘
+𝑢= 𝑣𝑘.
+(6)
+这为每个用户序列生成了 |𝑠𝑢| −1 个输入‑目标对：
+Dtrain
+𝑢
+=
+n
+𝑥𝑘
+𝑢,𝑦𝑘
+𝑢
+
+|2 ≤𝑘≤|𝑠𝑢|} .
+(7)
+当 𝑘仅等于 |𝑠𝑢|时，多目标策略退化为单目标策略。多目标
+策略提供了来自序列早期位置更多的监督信号。需要注意的是，
+前缀分割和多目标策略是正交的。前者涉及将原始序列分割成
+多个子序列，而后者是指应用于单个序列的训练策略。
+子序列分割的3个效应
+在本节中，我们通过实证研究展示了SSS如何影响对SR模型实际
+性能的评估。
+表1：我们调查的论文的统计数据。
+未使用SSS
+SSS被使用
+在论文中提及
+在论文中未提及
+6篇论文
+1篇论文
+10篇论文
+[17] [19] [50]
+[69]
+[94] [37] [40] [58] [2]
+[73] [85] [46]
+[45] [22] [57] [20] [72]
+3.1SR模型的识别
+为避免在我们的研究中挑选单个模型，我们采用与先前工作类
+似的方法[18, 56]，系统地扫描了科学会议的会议录和期刊出版
+物。具体而言，我们纳入了在2022年至20261 期间出现在以
+下八个会议系列中的论文进行分析：KDD、SIGIR、WWW、
+NeurIPS、AAAI、WSDM、CIKM和Rec‑Sys2。期刊包括
+TOIS和TKDE。在会议和期刊中，我们根据以下标准筛选论文：
+• 本文聚焦于经典序列推荐，这是我们这项工作中的主要研究
+方向。诸如跨域SR [88, 90], 多模态SR [3],和多行为SR [70],
+等子领域将不予考虑。
+• 本文的主要贡献是提出了一种用于SR的基础架构或骨干。主
+要介绍辅助任务（如对比学习 [47, 71],重建任务 [77, 79], 对齐
+任务 [36]）或提出其他数据增强方法的论文将被排除 [14, 42]3。
+该条件旨在消除其他辅助模块和任务对模型最终性能的贡献，
+从而严格评估子序列分割（SSS）对性能的影响。• 提供公开
+可用的代码以供复现。如果这些代码尚未公开可用，我们联系
+了所有论文作者并等待了30天回复。我们根据先前工作中的
+条件选择可复现的代码 [18], ，即要么源代码的可用版本是可
+工作的，要么代码只需进行极小的修改即可正常运行。
+应用上述标准筛选出了17篇论文。需要注意的是，我们关
+注的是SSS对评估模型实际性能的影响。因此，关于多少论文
+提供或未提供代码，或是否提供完整代码的可复现性研究，不
+在我们讨论范围内。我们对这17篇论文的全文、附录以及公开
+代码进行了彻底的审查和检查，以确定它们是否表明在论文中
+使用了SSS，或在代码中应用了它。结果展示在表1中。我们
+还给出了一个在数据读取阶段使用SSS的真实代码示例（算法
+1）。我们发现6篇论文未提及SSS，也未在代码中应用它。在
+采用SSS的11篇论文中，只有1篇明确将其作为方法论的一部
+分，并在消融研究中对其进行分析。其余10篇论文在代码中使
+用了SSS，但在正文中或附录中均未提及。经过仔细重新审查
+这10篇论文的代码后
+1为提高我们研究的时效性，我们收录了2026年已公布接受名单的会议。2所有
+这些会议均被澳大利亚核心排名评为A*或A等级。3部分研究采用了开源框架
+RecBole [92] 进行实验。然而，根据RecBole的官方文档，该框架默认启用数
+据增强功能。为确保更严谨和公平的分析，这些论文也被排除在外。
+2858
+
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+Yizhou Dang, et al.
+Algorithm 1 SSS code from the official implementation of [94]
+# user_seq: A list containing all original sequences.
+# max_len: Maximum Sequence Length N.
+for seq in user_seq:
+input_ids = seq[-(self.max_len + 2):-2]
+for i in range(len(input_ids)):
+self.user_seq.append(input_ids[:i + 1])
+# Then the new user_seq will be used as training data.
+Table 2: Statistics of datasets. The ‘AL’ denotes average length.
+Dataset
+# Users
+# Items
+# Interactions
+# AL
+Sparsity
+Beauty
+22,363
+12,101
+198,502
+8.9
+99.93%
+Sports
+35,598
+18,357
+296,337
+8.3
+99.95%
+Douyin
+20,398
+8,299
+139,834
+6.9
+99.92%
+LastFM
+1,090
+3,646
+52,551
+48.2
+98.68%
+papers, we found their overall pipelines to be remarkably similar.
+Therefore, we speculate that the later works were likely based on
+the earlier pipeline from [94] or on earlier pipeline improvements.
+Next, we will demonstrate how SSS influences researchers’ evalua-
+tion of the actual performance of the methods proposed in these
+ten papers published in top-tier conferences & journals.
+3.2
+Experimental Settings
+Datasets. The experiments are conducted on four widely used
+datasets from different scenarios. Beauty and Sports are obtained
+from the Amazon platform [49], corresponding to the “Beauty” and
+“Sports and Outdoors” categories. Douyin [84] includes short-video
+watching records. LastFM4 includes artist listening records and
+is used to recommend musicians to users. We reduce the data by
+extracting the 5-core [57, 58, 94]. Following the setup of most of
+the investigated papers, the maximum sequence length is set to 50
+for all datasets. The statistics are summarized in Table 2.
+Other Baselines. In addition to the model mentioned earlier, we
+selected four representative SR models based on different architec-
+tures, including GRU4Rec (based on recurrent neural networks)
+[23], SASRec [26] (based on Transformer), NextItNet (based on
+convolutional neural networks) [80], and LRURec (based on linear
+recurrent units) [81]. These models did not utilize SSS. Furthermore,
+for comparative purposes, we selected four SR models that incor-
+porate contrastive learning, including CLS4Rec [71], CoSeRec
+[47], DuoRec [53], and ICSRec [52]. These methods typically em-
+ploy data augmentation to generate self-supervised signals and use
+contrastive objectives to learn user preferences further.
+Evaluation Settings. We adopt the leave-one-out strategy to par-
+tition sequences into training, validation, and test sets. We rank
+predictions across the entire item set rather than using negative
+sampling, which can lead to biased discoveries [29]. The evaluation
+metrics include Hit Ratio@K (H@K) and Normalized Discounted
+Cumulative Gain@K (N@K). We report results with K ∈{10, 20}.
+Generally, greater values imply better ranking accuracy. We run
+five trials and report the average results for all methods.
+4https://grouplens.org/datasets/hetrec-2011/
+Implementation Details. For all baselines, we adopt the imple-
+mentation provided by the authors. We set the embedding size to 64
+and the batch size to 256. To ensure fair comparisons, we carefully
+set and tune all other hyperparameters of each method as reported
+and suggested in the original papers. We use the Adam [27] opti-
+mizer with the learning rate 0.001, 𝛽1 = 0.9, 𝛽2 = 0.999. We adopt
+early stopping on the validation set if the performance does not
+improve for 20 epochs, and report results on test set [47, 65].
+3.3
+Results Analysis
+We present the performance of baselines and our investigated mod-
+els in Table 3. We give the performance before and after removing
+the SSS. We have the following observations and analysis:
+(1) Among the four backbones without SSS, SASRec achieved
+optimal performance in almost all cases, demonstrating the Trans-
+former’s ability to model sequences. Contrastive learning enhances
+recommendation accuracy by extracting user preference knowl-
+edge from self-supervised signals. Some contrastive learning-based
+methods, such as DuoRec and ICSRec, achieve better performance
+by leveraging SSS to generate richer self-supervised signals.
+(2) For SR models incorporating SSS, we observe that most meth-
+ods achieve performance significantly better than that of contrastive
+learning-based SR models (and the SR models without SSS). This
+result reaffirms the conclusions drawn in prior work [95]. However,
+when we removed SSS from the data reading phase of these models,
+their performance declined significantly. Eight out of ten models
+show an average performance drop exceeding 40%, with five models
+experiencing nearly a 50% reduction. Many models proposed in the
+past year or two now perform worse than SASRec (highlighted in
+blue), which was introduced back in 2018.
+(3) To further illustrate how SSS impacts researchers’ evaluation
+of the actual performance of these latest models, Table 4 presents
+the overall performance percentage relative to SASRec for these
+models before and after SSS removal. We can observe that after
+removing SSS, nearly all models no longer outperform SASRec.
+It bears repeating that the original SASRec did not employ sub-
+sequence splitting. Researchers may have mistakenly attributed
+the remarkable performance gains from SSS to improvements in
+model architecture. Additionally, we observed that the number of
+models influenced by SSS increased in publications from 2023 to
+2025, with the vast majority proposed in 2025. Considering that
+conference and journal publications for 2026 have only just be-
+gun, more SSS-influenced models will likely be published in 2026.
+Therefore, attention to this issue is urgently needed.
+4
+When is SSS Effective
+In the previous section, we demonstrated how SSS interferes with
+researchers’ evaluation of a model’s actual performance. Beyond
+the model architecture itself, different models may employ distinct
+loss functions, splitting methods (introduced in Subsection 2.2),
+and target strategies (introduced in Subsection 2.3). We conducted
+comprehensive experiments to reveal how SSS interacts with these
+factors to jointly influence model performance.
+2859
+SIGIR’26，2026年7月20日至24日，墨尔本，维多利亚州，澳大利亚
+党宇舟等
+算法1从[94]的官方实现中获取SSS代码
+#user_seq：包含所有原始序列的列表。
+#max_len：最大序列长度N。
+forseqinuser_seq：
+输入_ids =序列[‑(self最大_长度+ 2):‑2]
+foriinrange(len(输入_ids)):
+self用户_序列.append(输入_ids[:i + 1])
+#然后将新的用户_序列将作为训练数据。
+表2：数据集统计。'AL'表示平均长度。
+数据集
+#用户
+#物品
+#交互
+# AL
+稀疏性
+美
+22,363
+12,101
+198,502
+8.9
+99.93%
+体育
+35,598
+18,357
+296,337
+8.3
+99.95%
+抖音
+20,398
+8,299
+139,834
+6.9
+99.92%
+LastFM
+1,090
+3,646
+52,551
+48.2
+98.68%
+我们发现它们的整体流程图出奇地相似。因此，我们推测后续
+工作可能基于早期的流程图[94]，或基于早期的流程图改进。
+接下来，我们将展示SSS如何影响研究人员对这10篇发表在顶
+级会议和期刊上的论文中提出的方法的实际性能评估。
+3.2实验设置
+数据集。实验在来自不同场景的四个广泛使用的数据集上进行。
+Beauty和Sports来自亚马逊平台 [49], ，分别对应“美妆”和
+“运动户外”类别。Douyin [84] 包含短视频观看记录。
+LastFM4 包含艺术家收听记录，用于向用户推荐音乐人。我
+们通过提取5‑core [57, 58, 94]来减少数据量。遵循大多数所
+研究论文的设置，所有数据集的最大序列长度设置为50。统
+计数据汇总在表2中。
+其他基线。除了前面提到的模型外，我们还选择了四个基于不
+同架构的代表性序列推荐（SR）模型，包括GRU4Rec（基于
+循环神经网络）[23], 、SASRec [26] （基于Transformer）、
+NextItNet（基于卷积神经网络） [80], 和LRURec（基于线
+性循环单元） [81]。这些模型没有使用SSS。此外，为了比
+较，我们还选择了四个结合了对比学习的SR模型，包括
+CLS4Rec [71], 、CoSeRec[47], 、DuoRec [53], 和
+ICSRec [52]。这些方法通常采用数据增强来生成自监督信号，
+并使用对比目标来进一步学习用户偏好。
+评估设置。我们采用留一法策略将序列划分为训练集、验证集
+和测试集。我们对整个物品集合进行预测排序，而不是使用负
+采样，这可能导致有偏的发现[29]。评估指标包括命中率@K
+（H@K）和归一化折损累积增益@K（N@K）。我们报告K ∈
+{10,20}的结果。通常，更大的值意味着更好的排序精度。我
+们运行了五次试验，并报告所有方法的平均结果。
+4https://grouplens.org/datasets/hetrec‑2011/
+实现细节。对于所有基线模型，我们采用作者提供的实现。我们
+将嵌入维度设置为64，批处理大小设置为256。为确保公平比较，
+我们仔细设置并调整了每种方法的所有其他超参数，如原始论文
+中报告和建议的那样。我们使用学习率为0.001的Adam [27] 优
+化器, 𝛽1 = 0.9, 𝛽2 = 0.999。如果验证集上的性能在20个epoch内没
+有提升，我们采用早停法，并在测试集[47, 65]上报告结果。
+3.3结果分析
+我们在表3中展示了基线模型和我们所研究的模型的表现。我
+们给出了移除SSS前后的表现。我们有以下观察和分析：
+(1)在没有SSS的四个主干网络中，SASRec在几乎所有情
+况下都取得了最佳表现，展示了Transformer建模序列的能力。
+对比学习通过从自监督信号中提取用户偏好知识来提高推荐准
+确率。一些基于对比学习的方法，如DuoRec和ICSRec，通过
+利用SSS生成更丰富的自监督信号来获得更好的性能。
+(2)对于包含SSS的SR模型，我们观察到大多数方法的表
+现明显优于对比学习SR模型（以及没有SSS的SR模型）。这
+一结果重申了先前工作中的结论[95]。然而，当我们从这些模
+型的数据读取阶段移除SSS时，它们的性能显著下降。十种模
+型中有八种的平均性能下降超过40%，其中五种模型的性能几
+乎减少了50%。过去一两年中提出的许多模型现在表现不如
+2018年提出的SASRec（蓝色高亮）。
+(3)为了进一步说明SSS如何影响研究人员对最新模型实
+际性能的评估，表4展示了这些模型在移除SSS前后的整体
+性能百分比相对于SASRec的变化。我们可以观察到，移除
+SSS后，几乎所有模型都不再优于SASRec。需要再次强调的
+是，原始的SASRec并未采用子序列拆分。研究人员可能错
+误地将SSS带来的显著性能提升归因于模型架构的改进。此
+外，我们观察到受SSS影响的模型数量在2023年至2025
+年的出版物中有所增加，其中绝大多数是在2025年提出的。
+考虑到2026年的会议和期刊出版物才刚刚开始，预计
+2026年将会有更多受SSS影响的模型发表。因此，迫切需
+要关注这一问题。
+4何时SSS有效
+在上一节中，我们展示了SSS如何干扰研究人员对模型实际性
+能的评估。除了模型架构本身，不同的模型可能会采用不同的
+损失函数、拆分方法（在2.2小节中介绍）和目标策略（在
+2.3小节中介绍）。我们进行了全面的实验，以揭示SSS如何
+与这些因素相互作用，共同影响模型性能。
+2859
+
+Pay Attention to Sequence Split: Uncovering the Impacts of Sub-Sequence Splitting
+on Sequential Recommendation Models
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+Table 3: Performance comparison of baseline SR models and our investigated models. The ‘w/o SSS’ indicates removing SSS from
+the official implementations of the corresponding models. The ‘Ave. Imp.’ indicate the average improvements after removing
+SSS across four datasets. Results where performance falls below SASRec are highlighted in blue.
+Model
+Venue
+Beauty
+Sports
+Douyin
+LastFM
+Ave. Imp.
+H@10 N@10 H@20 N@20 H@10 N@10 H@20 N@20 H@10 N@10 H@20 N@20 H@10 N@10 H@20 N@20
+SR Models without SSS
+GRU4Rec [23]
+ICLR 2016
+0.0423 0.0209 0.0704 0.0279 0.0180 0.0085 0.0311 0.0118 0.1060 0.0572 0.1480 0.0678 0.0385 0.0214 0.0569 0.0260
+—
+SASRec [26]
+ICDM 2018
+0.0580 0.0301 0.0910 0.0384 0.0323 0.0179 0.0490 0.0222 0.1243 0.0739 0.1677 0.0848 0.0661 0.0347 0.0982 0.0428
+—
+NextItNet [80] WSDM 2019 0.0324 0.0159 0.0526 0.0211 0.0169 0.0081 0.0305 0.0115 0.0696 0.0372 0.1058 0.0464 0.0544 0.0293 0.0969 0.0399
+—
+LRURec [81]
+WSDM 2024 0.0602 0.0310 0.0948 0.0396 0.0330 0.0185 0.0519 0.0232 0.1239 0.0742 0.1722 0.0856 0.0650 0.0339 0.0958 0.0412
+—
+SR Models with Contrastive Learning (The asterisk * Represents the use of SSS as part of the method for constructing contrastive views)
+CL4SRec [71]
+ICDE 2022
+0.0721 0.0399 0.1048 0.0481 0.0378 0.0206 0.0554 0.0248 0.1266 0.0723 0.1707 0.0851 0.0628 0.0358 0.0976 0.0421
+—
+CoSeRec [47]
+arXiv 2021
+0.0769 0.0420 0.1102 0.0503 0.0409 0.0225 0.0613 0.0274 0.1301 0.0742 0.1785 0.0869 0.0650 0.0366 0.1001 0.0434
+—
+DuoRec* [53]
+WSDM 2022 0.0844 0.0439 0.1208 0.0531 0.0456 0.0240 0.0669 0.0293 0.1372 0.0779 0.1894 0.0912 0.0587 0.0348 0.0881 0.0422
+—
+ICSRec* [52]
+WSDM 2024 0.0930 0.0562 0.1271 0.0648 0.0548 0.0318 0.0770 0.0374 0.1429 0.0823 0.1976 0.0943 0.0679 0.0415 0.1018 0.0501
+—
+SR Models with SSS (Using SSS in the official code implementation but not mentioned in the paper)
+FMLPRec [94]
+WWW 2022
+0.0620 0.0331 0.0908 0.0403 0.0309 0.0161 0.0474 0.0203 0.1245 0.0706 0.1714 0.0825 0.0633 0.0375 0.0982 0.0461
+—
+w/o SSS
+0.0607 0.0331 0.0926 0.0411 0.0326 0.0175 0.0507 0.0221 0.1316 0.0758 0.1796 0.0879 0.0642 0.0366 0.0982 0.0452
+3.34%
+DLFSRec [40]
+RecSys 2023
+0.0658 0.0347 0.1019 0.0439 0.0394 0.0216 0.0570 0.0259 0.1523 0.0873 0.1968 0.0981 0.0721 0.0427 0.1060 0.0503
+—
+w/o SSS
+0.0593 0.0306 0.0899 0.0396 0.0311 0.0173 0.0479 0.0218 0.1240 0.0767 0.1779 0.0873 0.0625 0.0371 0.0961 0.0447
+-13.39%
+DiffuRec [37]
+TOIS 2023
+0.0736 0.0434 0.1041 0.0514 0.0416 0.0227 0.0598 0.0275 0.1541 0.0909 0.2062 0.1045 0.0729 0.0418 0.1089 0.0487
+—
+w/o SSS
+0.0374 0.0241 0.0504 0.0274 0.0208 0.0119 0.0317 0.0152 0.1178 0.0745 0.1608 0.0844 0.0397 0.0228 0.0616 0.0273
+-40.15%
+BSARec [58]
+AAAI 2024
+0.0987 0.0595 0.1345 0.0685 0.0580 0.0338 0.0820 0.0399 0.1882 0.1199 0.2375 0.1323 0.0761 0.0441 0.1073 0.0519
+—
+w/o SSS
+0.0569 0.0349 0.0781 0.0402 0.0233 0.0143 0.0333 0.0168 0.1379 0.0875 0.1764 0.0972 0.0220 0.0109 0.0257 0.0118
+-50.46%
+MUFFIN [2]
+CIKM 2025
+0.0912 0.0491 0.1283 0.0594 0.0568 0.0293 0.0829 0.0378 0.1780 0.1163 0.2203 0.1259 0.0759 0.0428 0.1105 0.0514
+—
+w/o SSS
+0.0571 0.0343 0.0874 0.0390 0.0259 0.0154 0.0367 0.0184 0.1423 0.0950 0.1855 0.1078 0.0265 0.0166 0.0446 0.0202
+-41.11%
+CSRec [45]
+SIGIR 2025
+0.1016 0.0583 0.1372 0.0673 0.0565 0.0331 0.0789 0.0386 0.1836 0.1168 0.2311 0.1296 0.0792 0.0460 0.1096 0.0525
+—
+w/o SSS
+0.0602 0.0363 0.0795 0.0413 0.0246 0.0147 0.0349 0.0174 0.1406 0.0869 0.1821 0.0975 0.0269 0.0129 0.0314 0.0152
+-47.33%
+WaveRec [22]
+SIGIR 2025
+0.0871 0.0531 0.1172 0.0606 0.0524 0.0316 0.0708 0.0362 0.1502 0.0974 0.1854 0.1063 0.0560 0.0319 0.0817 0.0383
+—
+w/o SSS
+0.0553 0.0334 0.0746 0.0382 0.0260 0.0153 0.0365 0.0179 0.1256 0.0816 0.1574 0.0896 0.0193 0.0098 0.0294 0.0123
+-42.38%
+TV-Rec [57]
+NIPS 2025
+0.1017 0.0608 0.1403 0.0705 0.0594 0.0345 0.0859 0.0412 0.1964 0.1254 0.2461 0.1380 0.0853 0.0484 0.1202 0.0572
+—
+w/o SSS
+0.0602 0.0358 0.0818 0.0412 0.0271 0.0159 0.0381 0.0187 0.1650 0.1012 0.2055 0.1114 0.0193 0.0073 0.0275 0.0094
+-48.61%
+FreqRec [20]
+AAAI 2026
+0.0970 0.0590 0.1320 0.0678 0.0572 0.0336 0.0807 0.0396 0.1860 0.1174 0.2340 0.1296 0.0615 0.0378 0.0963 0.0466
+—
+w/o SSS
+0.0532 0.0324 0.0738 0.0375 0.0227 0.0137 0.0326 0.0162 0.1502 0.0941 0.1910 0.1044 0.0183 0.0089 0.0303 0.0120
+-48.98%
+WEARec [72]
+AAAI 2026
+0.1000 0.0591 0.1366 0.0683 0.0612 0.0355 0.0876 0.0421 0.1919 0.1221 0.2387 0.1340 0.0761 0.0415 0.1055 0.0490
+—
+w/o SSS
+0.0614 0.0368 0.0826 0.0421 0.0302 0.0176 0.0424 0.0207 0.1623 0.1010 0.2006 0.1107 0.0147 0.0078 0.0321 0.0122
+-45.65%
+Table 4: Overall percentage of the recent SR models in Table 3 compared to SASRec before and after removing SSS.
+Model
+FMLPRec [94]
+DLFSRec [40]
+DiffuRec [37]
+BSARec [58]
+MUFFIN [2]
+Variant
+Original
+w/o SSS
+Original
+w/o SSS
+Original
+w/o SSS
+Original
+w/o SSS
+Original
+w/o SSS
+Comparison with SASRec
+0.13%
+3.28%
+16.37%
+0.69%
+23.09%
+-26.34%
+55.85%
+-20.76%
+46.64%
+-27.29%
+Model
+CSRec [45]
+WaveRec [22]
+TV-Rec [57]
+FreqRec [20]
+WEARec [72]
+Variant
+Original
+w/o SSS
+Original
+w/o SSS
+Original
+w/o SSS
+Original
+w/o SSS
+Original
+w/o SSS
+Comparison with SASRec
+54.54%
+-17.07%
+31.09%
+-22.75%
+63.40%
+-13.85%
+50.16%
+-21.13%
+96.61%
+-11.04%
+4.1
+Additional Experimental setup
+Details of the Selected Models. We select four of the most rep-
+resentative and influential SR models from Table 3 for exploration
+in this section. Two are from SR models without SSS, two are from
+SR models with SSS. These four models, spanning 2016 to 2024 and
+based on different architectures, rank among the most highly cited
+models published during that period.
+• GRU4Rec [23]: This is the first model to apply the Gated Recur-
+rent Unit (GRU) to model sequences of user behavior for SR.
+• SASRec [26]: It is a representative Transformer-based model,
+which leverages the multi-head self-attention for the SR task.
+• FMLPRec [94]: It is an all-MLP model using a learnable filter-
+enhanced block to remove noise in the embedding matrix.
+• BSARec [58]: It is a hybrid model that combines self-attention
+with the Fourier Transform to address the oversmoothing.
+Loss Functions and Additional Datasets. For the loss function,
+we selected the binary cross-entropy loss (BCE) [23, 26] and cross-
+entropy loss (CE) [57, 58], which are the most commonly used in SR.
+Given the relatively small scale of the dataset used in Section 3, we
+add two new, larger-scale datasets, each containing nearly 1 million
+user-item interactions. MovieLens-1M (ML-1M) is a movie recom-
+mendation dataset from MovieLens5. It contains 6,041 users, 3,417
+items, and 999,611 interactions. The average sequence length is
+165.5, with a sparsity of 95.16%. The CDs is from the Amazon shop-
+ping platform [49], corresponding to the “CDs and Vinyl” category.
+5https://grouplens.org/datasets/movielens/
+2860
+注意序列分割：揭示子序列分割对序列推荐模型的影响
+SIGIR’26，2026年7月20日至24日，墨尔本，澳大利亚维多利亚州
+表3：基线SR模型和我们所研究模型性能对比。'w/oSSS'表示从相应模型的官方实现中移除SSS。'Ave.Imp.'表示在四个数据集
+上移除SSS后的平均改进。性能低于SASRec的结果以蓝色突出显示。
+模型
+会议
+美丽
+体育
+抖音
+LastFM
+平均影响H@10N@10H@20N@20H@10N@10H@20N@20H@10N@10H@20N@20H@10N@10H@20N@20
+无SSS的SR模型
+GRU4Rec [23]
+ICLR2016
+0.04230.02090.07040.02790.01800.00850.03110.01180.10600.05720.14800.06780.03850.02140.05690.0260
+—
+SASRec [26]
+ICDM2018
+0.05800.03010.09100.03840.03230.01790.04900.02220.12430.07390.16770.08480.06610.03470.09820.0428
+—
+NextItNet [80] WSDM20190.03240.01590.05260.02110.01690.00810.03050.01150.06960.03720.10580.04640.05440.02930.09690.0399
+—
+LRURec [81]
+WSDM20240.06020.03100.09480.03960.03300.01850.05190.02320.12390.07420.17220.08560.06500.03390.09580.0412
+—
+具有对比学习的SR模型（星号*表示SSS作为构建对比视图方法的一部分使用）
+CL4SRec [71]
+ICDE2022
+0.07210.03990.10480.04810.03780.02060.05540.02480.12660.07230.17070.08510.06280.03580.09760.0421
+—
+CoSeRec [47]
+arXiv2021
+0.07690.04200.11020.05030.04090.02250.06130.02740.13010.07420.17850.08690.06500.03660.10010.0434
+—
+DuoRec* [53] WSDM20220.08440.04390.12080.05310.04560.02400.06690.02930.13720.07790.18940.09120.05870.03480.08810.0422
+—
+ICSRec* [52]
+WSDM20240.09300.05620.12710.06480.05480.03180.07700.03740.14290.08230.19760.09430.06790.04150.10180.0501
+—
+使用SSS的SR模型（在官方代码实现中使用SSS但论文中未提及）
+FMLPRec [94]
+WWW2022
+0.06200.03310.09080.04030.03090.01610.04740.02030.12450.07060.17140.08250.06330.03750.09820.0461
+—
+w/oSSS
+0.06070.03310.09260.04110.03260.01750.05070.02210.13160.07580.17960.08790.06420.03660.09820.0452
+3.34%
+DLFSRec [40]
+RecSys2023
+0.06580.03470.10190.04390.03940.02160.05700.02590.15230.08730.19680.09810.07210.04270.10600.0503
+—
+w/oSSS
+0.05930.03060.08990.03960.03110.01730.04790.02180.12400.07670.17790.08730.06250.03710.09610.0447
+‑13.39%
+DiffuRec [37]
+TOIS2023
+0.07360.04340.10410.05140.04160.02270.05980.02750.15410.09090.20620.10450.07290.04180.10890.0487
+—
+w/oSSS
+0.03740.02410.05040.02740.02080.01190.03170.01520.11780.07450.16080.08440.03970.02280.06160.0273
+‑40.15%
+BSARec [58]
+AAAI2024
+0.09870.05950.13450.06850.05800.03380.08200.03990.18820.11990.23750.13230.07610.04410.10730.0519
+—
+w/oSSS
+0.05690.03490.07810.04020.02330.01430.03330.01680.13790.08750.17640.09720.02200.01090.02570.0118
+‑50.46%
+松饼 [2]
+CIKM2025
+0.09120.04910.12830.05940.05680.02930.08290.03780.17800.11630.22030.12590.07590.04280.11050.0514
+—
+不含SSS
+0.05710.03430.08740.03900.02590.01540.03670.01840.14230.09500.18550.10780.02650.01660.04460.0202
+‑41.11%
+CSRec [45]
+SIGIR2025
+0.10160.05830.13720.06730.05650.03310.07890.03860.18360.11680.23110.12960.07920.04600.10960.0525
+—
+w/oSSS
+0.06020.03630.07950.04130.02460.01470.03490.01740.14060.08690.18210.09750.02690.01290.03140.0152
+‑47.33%
+WaveRec [22]
+SIGIR2025
+0.08710.05310.11720.06060.05240.03160.07080.03620.15020.09740.18540.10630.05600.03190.08170.0383
+—
+w/oSSS
+0.05530.03340.07460.03820.02600.01530.03650.01790.12560.08160.15740.08960.01930.00980.02940.0123
+‑42.38%
+TV‑Rec [57]
+NIPS2025
+0.10170.06080.14030.07050.05940.03450.08590.04120.19640.12540.24610.13800.08530.04840.12020.0572
+—
+w/oSSS
+0.06020.03580.08180.04120.02710.01590.03810.01870.16500.10120.20550.11140.01930.00730.02750.0094
+‑48.61%
+FreqRec [20]
+AAAI2026
+0.09700.05900.13200.06780.05720.03360.08070.03960.18600.11740.23400.12960.06150.03780.09630.0466
+—
+w/oSSS
+0.05320.03240.07380.03750.02270.01370.03260.01620.15020.09410.19100.10440.01830.00890.03030.0120
+‑48.98%
+WEARec [72]
+AAAI2026
+0.10000.05910.13660.06830.06120.03550.08760.04210.19190.12210.23870.13400.07610.04150.10550.0490
+—
+w/oSSS
+0.06140.03680.08260.04210.03020.01760.04240.02070.16230.10100.20060.11070.01470.00780.03210.0122
+‑45.65%
+表4：表3中最近SR模型与SASRec在移除SSS前后的总体百分比比较。
+模型
+FMLPRec [94]
+DLFSRec [40]
+DiffuRec [37]
+BSARec [58]
+玛芬 [2]
+变体
+原始
+无SSS
+原始
+无SSS
+原始
+无SSS
+原始
+无SSS
+原始
+无SSS
+与SASRec的比较
+0.13%
+3.28%
+16.37%
+0.69%
+23.09%
+‑26.34%
+55.85%
+‑20.76%
+46.64%
+‑27.29%
+模型
+CSRec [45]
+WaveRec [22]
+TV‑Rec [57]
+FreqRec [20]
+WEARec [72]
+变体
+原始
+无SSS
+原始
+无SSS
+原始
+无SSS
+原始
+无SSS
+原始
+无SSS
+与SASRec的比较
+54.54%
+‑17.07%
+31.09%
+‑22.75%
+63.40%
+‑13.85%
+50.16%
+‑21.13%
+96.61%
+‑11.04%
+4.1额外实验设置
+所选模型的详细信息。在本节中，我们从表3中选择了四个最
+具代表性和影响力的SR模型进行探索。其中两个来自没有
+SSS的SR模型，另外两个来自有SSS的SR模型。这四个模型
+涵盖了2016年至2024年，基于不同的架构，是同期发表的最
+受引用的模型之一。
+• GRU4Rec [23]:这是首个将门控循环单元（GRU）应用于建模用户
+行为序列以进行序列推荐（SR）的模型。
+• SASRec [26]:它是一种基于Transformer的代表模型，利用多头自注
+意力机制用于序列推荐（SR）任务。
+• FMLPRec [94]：它是一个使用可学习滤波器增强模块来去除嵌入矩
+阵噪声的全MLP模型。
+• BSARec [58]：它是一个结合自注意力机制与傅里叶变换的混
+合模型，用于解决过度平滑问题。
+损失函数和附加数据集。对于损失函数，我们选择了二元交叉熵损失
+（BCE）[23, 26] 和交叉熵损失（CE）[57, 58],，它们是序列推荐（
+SR）中最常用的。鉴于第3节中使用的数据集规模相对较小，我们增
+加了两个新的、规模更大的数据集，每个数据集包含近100万用户‑物
+品交互。MovieLens‑1M（ML‑1M）是一个来自MovieLens5的影片推
+荐数据集。它包含6,041名用户、3,417个物品和999,611次交互。
+平均序列长度为165.5，稀疏度为95.16%。CDs来自亚马逊购物平台
+[49], ，对应“CDs和黑胶唱片”类别。
+5https://grouplens.org/datasets/movielens/
+2860
+
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+Yizhou Dang, et al.
+Table 5: The performance of four backbone SR models with different training settings on four small-scale datasets. The best
+performance in each case is highlighted in bolded red and the second-best is highlighted in underlined blue.
+Model
+Target Loss
+Split
+Beauty
+Sports
+Douyin
+LastFM
+H@10
+N@10
+H@20
+N@20
+H@10
+N@10
+H@20
+N@20
+H@10
+N@10
+H@20
+N@20
+H@10
+N@10
+H@20
+N@20
+GRU4Rec
+Single
+BCE
+Prefix
+0.0312
+0.0153
+0.0493
+0.0198
+0.0207
+0.0110
+0.0319
+0.0138
+0.0689
+0.0347
+0.1072
+0.0443
+0.0321
+0.0177
+0.0541
+0.0231
+Suffix
+0.0250
+0.0125
+0.0419
+0.0167
+0.0112
+0.0054
+0.0188
+0.0073
+0.0578
+0.0302
+0.0914
+0.0387
+0.0220
+0.0157
+0.0303
+0.0178
+Slide
+0.0236
+0.0127
+0.0412
+0.0171
+0.0162
+0.0083
+0.0270
+0.0110
+0.0822
+0.0433
+0.1203
+0.0529
+0.0339
+0.0185
+0.0514
+0.0231
+Original
+0.0152
+0.0075
+0.0250
+0.0100
+0.0097
+0.0056
+0.0173
+0.0075
+0.0258
+0.0125
+0.0442
+0.0171
+0.0092
+0.0050
+0.0220
+0.0082
+CE
+Prefix
+0.0688
+0.0379
+0.0999
+0.0458
+0.0401
+0.0215
+0.0605
+0.0266
+0.1414
+0.0878
+0.1839
+0.0986
+0.0606
+0.0315
+0.0807
+0.0365
+Suffix
+0.0343
+0.0198
+0.0494
+0.0236
+0.0135
+0.0071
+0.0216
+0.0092
+0.0966
+0.0621
+0.1219
+0.0685
+0.0193
+0.0135
+0.0275
+0.0157
+Slide
+0.0616
+0.0348
+0.0881
+0.0414
+0.0336
+0.0181
+0.0512
+0.0225
+0.1271
+0.0780
+0.1654
+0.0876
+0.0459
+0.0235
+0.0725
+0.0304
+Original
+0.0330
+0.0179
+0.0485
+0.0217
+0.0183
+0.0092
+0.0288
+0.0119
+0.1023
+0.0598
+0.1322
+0.0673
+0.0257
+0.0126
+0.0450
+0.0175
+Multi
+BCE
+Prefix
+0.0444
+0.0230
+0.0706
+0.0296
+0.0169
+0.0082
+0.0285
+0.0111
+0.1079
+0.0591
+0.1482
+0.0693
+0.0560
+0.0296
+0.0862
+0.0372
+Suffix
+0.0576
+0.0306
+0.0841
+0.0373
+0.0253
+0.0129
+0.0409
+0.0168
+0.1333
+0.0788
+0.1680
+0.0876
+0.0495
+0.0260
+0.0725
+0.0318
+Slide
+0.0528
+0.0287
+0.0804
+0.0356
+0.0220
+0.0116
+0.0358
+0.0150
+0.1235
+0.0696
+0.1627
+0.0795
+0.0569
+0.0291
+0.0853
+0.0362
+Original
+0.0423
+0.0209
+0.0704
+0.0279
+0.0180
+0.0085
+0.0311
+0.0118
+0.1060
+0.0572
+0.1480
+0.0678
+0.0385
+0.0214
+0.0569
+0.0260
+CE
+Prefix
+0.0442
+0.0251
+0.0639
+0.0300
+0.0193
+0.0109
+0.0305
+0.0138
+0.0974
+0.0608
+0.1274
+0.0684
+0.0239
+0.0115
+0.0514
+0.0184
+Suffix
+0.0526
+0.0311
+0.0723
+0.0361
+0.0228
+0.0132
+0.0352
+0.0163
+0.1222
+0.0785
+0.1534
+0.0863
+0.0339
+0.0174
+0.0596
+0.0240
+Slide
+0.0775
+0.0470
+0.1054
+0.0540
+0.0292
+0.0166
+0.0432
+0.0201
+0.1108
+0.0689
+0.1419
+0.0768
+0.0486
+0.0259
+0.0688
+0.0309
+Original
+0.0508
+0.0290
+0.0718
+0.0343
+0.0206
+0.0106
+0.0321
+0.0135
+0.1143
+0.0722
+0.1462
+0.0803
+0.0495
+0.0258
+0.0761
+0.0324
+SASRec
+Single
+BCE
+Prefix
+0.0455
+0.0240
+0.0735
+0.0310
+0.0282
+0.0142
+0.0477
+0.0183
+0.1095
+0.0617
+0.1542
+0.0730
+0.0606
+0.0334
+0.0872
+0.0401
+Suffix
+0.0471
+0.0254
+0.0673
+0.0305
+0.0203
+0.0105
+0.0296
+0.0129
+0.1052
+0.0628
+0.1378
+0.0710
+0.0138
+0.0063
+0.0174
+0.0072
+Slide
+0.0529
+0.0273
+0.0789
+0.0338
+0.0280
+0.0150
+0.0427
+0.0187
+0.1078
+0.0638
+0.1484
+0.0740
+0.0450
+0.0249
+0.0688
+0.0308
+Original
+0.0463
+0.0259
+0.0657
+0.0308
+0.0100
+0.0058
+0.0162
+0.0073
+0.1002
+0.0604
+0.1291
+0.0677
+0.0138
+0.0064
+0.0239
+0.0089
+CE
+Prefix
+0.0944
+0.0572
+0.1270
+0.0654
+0.0550
+0.0323
+0.0777
+0.0380
+0.1622
+0.1032
+0.2030
+0.1135
+0.0661
+0.0395
+0.0862
+0.0447
+Suffix
+0.0464
+0.0270
+0.0692
+0.0327
+0.0195
+0.0107
+0.0279
+0.0129
+0.1256
+0.0807
+0.1579
+0.0889
+0.0183
+0.0087
+0.0229
+0.0099
+Slide
+0.0815
+0.0500
+0.1122
+0.0577
+0.0456
+0.0266
+0.0640
+0.0313
+0.1583
+0.1006
+0.2000
+0.1111
+0.0514
+0.0305
+0.0734
+0.0360
+Original
+0.0537
+0.0321
+0.0722
+0.0368
+0.0242
+0.0145
+0.0334
+0.0168
+0.1414
+0.0901
+0.1766
+0.0990
+0.0110
+0.0047
+0.0257
+0.0084
+Multi
+BCE
+Prefix
+0.0594
+0.0316
+0.0868
+0.0385
+0.0301
+0.0162
+0.0459
+0.0202
+0.1181
+0.0664
+0.1608
+0.0771
+0.0615
+0.0365
+0.0872
+0.0430
+Suffix
+0.0674
+0.0361
+0.0968
+0.0434
+0.0303
+0.0162
+0.0479
+0.0206
+0.1277
+0.0747
+0.1686
+0.0850
+0.0440
+0.0255
+0.0771
+0.0339
+Slide
+0.0596
+0.0311
+0.0863
+0.0378
+0.0278
+0.0151
+0.0427
+0.0188
+0.1254
+0.0735
+0.1689
+0.0845
+0.0358
+0.0212
+0.0569
+0.0265
+Original
+0.0580
+0.0301
+0.0910
+0.0384
+0.0323
+0.0179
+0.0490
+0.0222
+0.1243
+0.0739
+0.1677
+0.0848
+0.0661
+0.0347
+0.0982
+0.0428
+CE
+Prefix
+0.0731
+0.0444
+0.1002
+0.0512
+0.0385
+0.0224
+0.0558
+0.0267
+0.1562
+0.0971
+0.1987
+0.1078
+0.0596
+0.0342
+0.0780
+0.0389
+Suffix
+0.0727
+0.0424
+0.1011
+0.0496
+0.0382
+0.0213
+0.0548
+0.0255
+0.1543
+0.0975
+0.1954
+0.1078
+0.0468
+0.0231
+0.0734
+0.0298
+Slide
+0.0804
+0.0493
+0.1082
+0.0564
+0.0442
+0.0263
+0.0620
+0.0308
+0.1572
+0.0975
+0.2023
+0.1089
+0.0459
+0.0290
+0.0761
+0.0366
+Original
+0.0947
+0.0569
+0.1312
+0.0661
+0.0527
+0.0306
+0.0755
+0.0363
+0.1718
+0.1094
+0.2146
+0.1202
+0.0615
+0.0338
+0.0927
+0.0416
+FMLPRec
+Single
+BCE
+Prefix
+0.0564
+0.0292
+0.0867
+0.0368
+0.0314
+0.0171
+0.0505
+0.0219
+0.1272
+0.0716
+0.1819
+0.0853
+0.0670
+0.0324
+0.1000
+0.0408
+Suffix
+0.0510
+0.0284
+0.0724
+0.0338
+0.0220
+0.0114
+0.0332
+0.0142
+0.1142
+0.0669
+0.1489
+0.0757
+0.0083
+0.0042
+0.0202
+0.0072
+Slide
+0.0554
+0.0291
+0.0848
+0.0365
+0.0316
+0.0173
+0.0484
+0.0215
+0.1261
+0.0703
+0.1762
+0.0830
+0.0477
+0.0302
+0.0752
+0.0371
+Original
+0.0446
+0.0250
+0.0632
+0.0296
+0.0096
+0.0054
+0.0201
+0.0080
+0.1095
+0.0642
+0.1417
+0.0723
+0.0147
+0.0070
+0.0220
+0.0089
+CE
+Prefix
+0.0962
+0.0568
+0.1324
+0.0660
+0.0706
+0.0401
+0.1128
+0.0507
+0.1957
+0.1243
+0.2452
+0.1369
+0.0584
+0.0333
+0.0836
+0.0397
+Suffix
+0.0513
+0.0297
+0.0718
+0.0348
+0.0183
+0.0080
+0.0229
+0.0092
+0.1494
+0.0934
+0.1854
+0.1026
+0.0223
+0.0124
+0.0322
+0.0149
+Slide
+0.0894
+0.0541
+0.1236
+0.0627
+0.0615
+0.0340
+0.0927
+0.0417
+0.1779
+0.1114
+0.2217
+0.1224
+0.0513
+0.0293
+0.0719
+0.0344
+Original
+0.0557
+0.0345
+0.0753
+0.0395
+0.0119
+0.0049
+0.0257
+0.0082
+0.1592
+0.0997
+0.1976
+0.1094
+0.0250
+0.0149
+0.0349
+0.0174
+Multi
+BCE
+Prefix
+0.0620
+0.0331
+0.0908
+0.0403
+0.0309
+0.0161
+0.0474
+0.0203
+0.1245
+0.0706
+0.1714
+0.0825
+0.0633
+0.0375
+0.0982
+0.0461
+Suffix
+0.0658
+0.0359
+0.0974
+0.0439
+0.0309
+0.0170
+0.0478
+0.0213
+0.1301
+0.0763
+0.1709
+0.0866
+0.0532
+0.0281
+0.0835
+0.0356
+Slide
+0.0566
+0.0304
+0.0846
+0.0374
+0.0288
+0.0154
+0.0441
+0.0192
+0.1268
+0.0730
+0.1724
+0.0845
+0.0459
+0.0255
+0.0633
+0.0299
+Original
+0.0607
+0.0331
+0.0926
+0.0411
+0.0326
+0.0175
+0.0507
+0.0221
+0.1316
+0.0758
+0.1796
+0.0879
+0.0642
+0.0366
+0.0982
+0.0452
+CE
+Prefix
+0.0722
+0.0440
+0.1000
+0.0510
+0.0366
+0.0212
+0.0543
+0.0256
+0.1555
+0.0979
+0.1964
+0.1082
+0.0606
+0.0355
+0.0853
+0.0418
+Suffix
+0.0737
+0.0438
+0.1020
+0.0509
+0.0345
+0.0194
+0.0513
+0.0236
+0.1525
+0.0969
+0.1947
+0.1075
+0.0422
+0.0232
+0.0743
+0.0313
+Slide
+0.0811
+0.0502
+0.1086
+0.0571
+0.0444
+0.0266
+0.0632
+0.0313
+0.1583
+0.0986
+0.2006
+0.1093
+0.0459
+0.0294
+0.0651
+0.0343
+Original
+0.0930
+0.0566
+0.1273
+0.0652
+0.0511
+0.0299
+0.0737
+0.0356
+0.1790
+0.1133
+0.2272
+0.1255
+0.0670
+0.0371
+0.0936
+0.0437
+BSARec
+Single
+BCE
+Prefix
+0.0578
+0.0304
+0.0872
+0.0378
+0.0295
+0.0158
+0.0464
+0.0200
+0.1289
+0.0707
+0.1832
+0.0843
+0.0642
+0.0397
+0.0972
+0.0481
+Suffix
+0.0503
+0.0286
+0.0715
+0.0339
+0.0208
+0.0107
+0.0305
+0.0131
+0.1143
+0.0688
+0.1495
+0.0777
+0.0138
+0.0078
+0.0239
+0.0103
+Slide
+0.0609
+0.0327
+0.0887
+0.0397
+0.0304
+0.0162
+0.0471
+0.0204
+0.1228
+0.0706
+0.1661
+0.0816
+0.0523
+0.0279
+0.0743
+0.0332
+Original
+0.0489
+0.0273
+0.0690
+0.0324
+0.0127
+0.0065
+0.0193
+0.0081
+0.1032
+0.0618
+0.1365
+0.0702
+0.0092
+0.0036
+0.0294
+0.0086
+CE
+Prefix
+0.0987
+0.0595
+0.1345
+0.0685
+0.0580
+0.0338
+0.0820
+0.0399
+0.1882
+0.1199
+0.2375
+0.1323
+0.0761
+0.0441
+0.1073
+0.0519
+Suffix
+0.0509
+0.0290
+0.0709
+0.0341
+0.0217
+0.0120
+0.0317
+0.0146
+0.1379
+0.0875
+0.1764
+0.0972
+0.0220
+0.0109
+0.0257
+0.0118
+Slide
+0.0868
+0.0525
+0.1170
+0.0602
+0.0461
+0.0275
+0.0655
+0.0324
+0.1795
+0.1144
+0.2250
+0.1258
+0.0596
+0.0341
+0.0963
+0.0434
+Original
+0.0569
+0.0349
+0.0781
+0.0402
+0.0233
+0.0143
+0.0333
+0.0168
+0.1569
+0.0981
+0.1996
+0.1088
+0.0211
+0.0104
+0.0349
+0.0139
+Multi
+BCE
+Prefix
+0.0732
+0.0402
+0.1069
+0.0487
+0.0372
+0.0199
+0.0574
+0.0250
+0.1363
+0.0789
+0.1866
+0.0916
+0.0826
+0.0459
+0.1147
+0.0539
+Suffix
+0.0745
+0.0425
+0.1057
+0.0503
+0.0346
+0.0188
+0.0535
+0.0236
+0.1419
+0.0845
+0.1843
+0.0951
+0.0615
+0.0304
+0.0982
+0.0395
+Slide
+0.0699
+0.0387
+0.0986
+0.0459
+0.0340
+0.0183
+0.0513
+0.0227
+0.1404
+0.0813
+0.1896
+0.0937
+0.0606
+0.0333
+0.0899
+0.0407
+Original
+0.0713
+0.0386
+0.1043
+0.0469
+0.0353
+0.0190
+0.0544
+0.0238
+0.1378
+0.0795
+0.1871
+0.0920
+0.0725
+0.0418
+0.1101
+0.0511
+CE
+Prefix
+0.0741
+0.0451
+0.1009
+0.0518
+0.0386
+0.0222
+0.0556
+0.0265
+0.1641
+0.1023
+0.2082
+0.1135
+0.0679
+0.0366
+0.0927
+0.0428
+Suffix
+0.0703
+0.0422
+0.0990
+0.0495
+0.0366
+0.0203
+0.0533
+0.0245
+0.1648
+0.1032
+0.2094
+0.1145
+0.0358
+0.0187
+0.0578
+0.0242
+Slide
+0.0811
+0.0500
+0.1101
+0.0572
+0.0430
+0.0257
+0.0599
+0.0300
+0.1607
+0.1016
+0.2030
+0.1123
+0.0578
+0.0341
+0.0817
+0.0401
+Original
+0.0827
+0.0503
+0.1171
+0.0589
+0.0474
+0.0268
+0.0689
+0.0322
+0.1683
+0.1070
+0.2107
+0.1177
+0.0771
+0.0444
+0.1073
+0.0520
+It contains 75,258 users, 66,443 items, and 1,097,592 interactions.
+The average sequence length is 14.6, with a sparsity of 99.97%.
+4.2
+Results Analysis
+The performance of four backbone SR models with different loss
+functions, splitting methods, and target strategies are presented in
+2861
+SIGIR’26，2026年7月20日至24日，墨尔本，维多利亚州，澳大利亚
+党宇舟等
+表5：四种具有不同训练设置的主干SR模型在四个小规模数据集上的性能。每种情况下的最佳性能以加粗红色突出显示，第二好的性能
+以蓝色下划线突出显示。
+模型目标损失
+拆分
+美丽
+体育
+抖音
+LastFM
+H@10N@10H@20N@20
+H@10N@10H@20N@20
+H@10N@10H@20N@20
+H@10N@10H@20N@20
+GRU4Rec
+单个
+BCE
+前缀
+0.0312
+0.0153
+0.0493
+0.0198
+0.0207
+0.0110
+0.0319
+0.0138
+0.0689
+0.0347
+0.1072
+0.0443
+0.0321
+0.0177
+0.0541
+0.0231
+后缀
+0.0250
+0.0125
+0.0419
+0.0167
+0.0112
+0.0054
+0.0188
+0.0073
+0.0578
+0.0302
+0.0914
+0.0387
+0.0220
+0.0157
+0.0303
+0.0178
+滑动
+0.0236
+0.0127
+0.0412
+0.0171
+0.0162
+0.0083
+0.0270
+0.0110
+0.0822
+0.0433
+0.1203
+0.0529
+0.0339
+0.0185
+0.0514
+0.0231
+原始
+0.0152
+0.0075
+0.0250
+0.0100
+0.0097
+0.0056
+0.0173
+0.0075
+0.0258
+0.0125
+0.0442
+0.0171
+0.0092
+0.0050
+0.0220
+0.0082
+CE
+前缀
+0.0688
+0.0379
+0.0999
+0.0458
+0.0401
+0.0215
+0.0605
+0.0266
+0.1414
+0.0878
+0.1839
+0.0986
+0.0606
+0.0315
+0.0807
+0.0365
+后缀
+0.0343
+0.0198
+0.0494
+0.0236
+0.0135
+0.0071
+0.0216
+0.0092
+0.0966
+0.0621
+0.1219
+0.0685
+0.0193
+0.0135
+0.0275
+0.0157
+幻灯片
+0.0616
+0.0348
+0.0881
+0.0414
+0.0336
+0.0181
+0.0512
+0.0225
+0.1271
+0.0780
+0.1654
+0.0876
+0.0459
+0.0235
+0.0725
+0.0304
+原始
+0.0330
+0.0179
+0.0485
+0.0217
+0.0183
+0.0092
+0.0288
+0.0119
+0.1023
+0.0598
+0.1322
+0.0673
+0.0257
+0.0126
+0.0450
+0.0175
+多
+BCE
+前缀
+0.0444
+0.0230
+0.0706
+0.0296
+0.0169
+0.0082
+0.0285
+0.0111
+0.1079
+0.0591
+0.1482
+0.0693
+0.0560
+0.0296
+0.0862
+0.0372
+后缀
+0.0576
+0.0306
+0.0841
+0.0373
+0.0253
+0.0129
+0.0409
+0.0168
+0.1333
+0.0788
+0.1680
+0.0876
+0.0495
+0.0260
+0.0725
+0.0318
+幻灯片
+0.0528
+0.0287
+0.0804
+0.0356
+0.0220
+0.0116
+0.0358
+0.0150
+0.1235
+0.0696
+0.1627
+0.0795
+0.0569
+0.0291
+0.0853
+0.0362
+原始
+0.0423
+0.0209
+0.0704
+0.0279
+0.0180
+0.0085
+0.0311
+0.0118
+0.1060
+0.0572
+0.1480
+0.0678
+0.0385
+0.0214
+0.0569
+0.0260
+CE
+前缀
+0.0442
+0.0251
+0.0639
+0.0300
+0.0193
+0.0109
+0.0305
+0.0138
+0.0974
+0.0608
+0.1274
+0.0684
+0.0239
+0.0115
+0.0514
+0.0184
+后缀
+0.0526
+0.0311
+0.0723
+0.0361
+0.0228
+0.0132
+0.0352
+0.0163
+0.1222
+0.0785
+0.1534
+0.0863
+0.0339
+0.0174
+0.0596
+0.0240
+幻灯片
+0.0775
+0.0470
+0.1054
+0.0540
+0.0292
+0.0166
+0.0432
+0.0201
+0.1108
+0.0689
+0.1419
+0.0768
+0.0486
+0.0259
+0.0688
+0.0309
+原始
+0.0508
+0.0290
+0.0718
+0.0343
+0.0206
+0.0106
+0.0321
+0.0135
+0.1143
+0.0722
+0.1462
+0.0803
+0.0495
+0.0258
+0.0761
+0.0324
+SASRec
+单个
+BCE
+前缀
+0.0455
+0.0240
+0.0735
+0.0310
+0.0282
+0.0142
+0.0477
+0.0183
+0.1095
+0.0617
+0.1542
+0.0730
+0.0606
+0.0334
+0.0872
+0.0401
+后缀
+0.0471
+0.0254
+0.0673
+0.0305
+0.0203
+0.0105
+0.0296
+0.0129
+0.1052
+0.0628
+0.1378
+0.0710
+0.0138
+0.0063
+0.0174
+0.0072
+幻灯片
+0.0529
+0.0273
+0.0789
+0.0338
+0.0280
+0.0150
+0.0427
+0.0187
+0.1078
+0.0638
+0.1484
+0.0740
+0.0450
+0.0249
+0.0688
+0.0308
+原始
+0.0463
+0.0259
+0.0657
+0.0308
+0.0100
+0.0058
+0.0162
+0.0073
+0.1002
+0.0604
+0.1291
+0.0677
+0.0138
+0.0064
+0.0239
+0.0089
+CE
+前缀
+0.0944
+0.0572
+0.1270
+0.0654
+0.0550
+0.0323
+0.0777
+0.0380
+0.1622
+0.1032
+0.2030
+0.1135
+0.0661
+0.0395
+0.0862
+0.0447
+后缀
+0.0464
+0.0270
+0.0692
+0.0327
+0.0195
+0.0107
+0.0279
+0.0129
+0.1256
+0.0807
+0.1579
+0.0889
+0.0183
+0.0087
+0.0229
+0.0099
+幻灯片
+0.0815
+0.0500
+0.1122
+0.0577
+0.0456
+0.0266
+0.0640
+0.0313
+0.1583
+0.1006
+0.2000
+0.1111
+0.0514
+0.0305
+0.0734
+0.0360
+原始
+0.0537
+0.0321
+0.0722
+0.0368
+0.0242
+0.0145
+0.0334
+0.0168
+0.1414
+0.0901
+0.1766
+0.0990
+0.0110
+0.0047
+0.0257
+0.0084
+多
+BCE
+前缀
+0.0594
+0.0316
+0.0868
+0.0385
+0.0301
+0.0162
+0.0459
+0.0202
+0.1181
+0.0664
+0.1608
+0.0771
+0.0615
+0.0365
+0.0872
+0.0430
+后缀
+0.0674
+0.0361
+0.0968
+0.0434
+0.0303
+0.0162
+0.0479
+0.0206
+0.1277
+0.0747
+0.1686
+0.0850
+0.0440
+0.0255
+0.0771
+0.0339
+滑动
+0.0596
+0.0311
+0.0863
+0.0378
+0.0278
+0.0151
+0.0427
+0.0188
+0.1254
+0.0735
+0.1689
+0.0845
+0.0358
+0.0212
+0.0569
+0.0265
+原始
+0.0580
+0.0301
+0.0910
+0.0384
+0.0323
+0.0179
+0.0490
+0.0222
+0.1243
+0.0739
+0.1677
+0.0848
+0.0661
+0.0347
+0.0982
+0.0428
+CE
+前缀
+0.0731
+0.0444
+0.1002
+0.0512
+0.0385
+0.0224
+0.0558
+0.0267
+0.1562
+0.0971
+0.1987
+0.1078
+0.0596
+0.0342
+0.0780
+0.0389
+后缀
+0.0727
+0.0424
+0.1011
+0.0496
+0.0382
+0.0213
+0.0548
+0.0255
+0.1543
+0.0975
+0.1954
+0.1078
+0.0468
+0.0231
+0.0734
+0.0298
+幻灯片
+0.0804
+0.0493
+0.1082
+0.0564
+0.0442
+0.0263
+0.0620
+0.0308
+0.1572
+0.0975
+0.2023
+0.1089
+0.0459
+0.0290
+0.0761
+0.0366
+原始
+0.0947
+0.0569
+0.1312
+0.0661
+0.0527
+0.0306
+0.0755
+0.0363
+0.1718
+0.1094
+0.2146
+0.1202
+0.0615
+0.0338
+0.0927
+0.0416
+FMLPRec
+单个
+BCE
+前缀
+0.0564
+0.0292
+0.0867
+0.0368
+0.0314
+0.0171
+0.0505
+0.0219
+0.1272
+0.0716
+0.1819
+0.0853
+0.0670
+0.0324
+0.1000
+0.0408
+后缀
+0.0510
+0.0284
+0.0724
+0.0338
+0.0220
+0.0114
+0.0332
+0.0142
+0.1142
+0.0669
+0.1489
+0.0757
+0.0083
+0.0042
+0.0202
+0.0072
+幻灯片
+0.0554
+0.0291
+0.0848
+0.0365
+0.0316
+0.0173
+0.0484
+0.0215
+0.1261
+0.0703
+0.1762
+0.0830
+0.0477
+0.0302
+0.0752
+0.0371
+原始
+0.0446
+0.0250
+0.0632
+0.0296
+0.0096
+0.0054
+0.0201
+0.0080
+0.1095
+0.0642
+0.1417
+0.0723
+0.0147
+0.0070
+0.0220
+0.0089
+CE
+前缀
+0.0962
+0.0568
+0.1324
+0.0660
+0.0706
+0.0401
+0.1128
+0.0507
+0.1957
+0.1243
+0.2452
+0.1369
+0.0584
+0.0333
+0.0836
+0.0397
+后缀
+0.0513
+0.0297
+0.0718
+0.0348
+0.0183
+0.0080
+0.0229
+0.0092
+0.1494
+0.0934
+0.1854
+0.1026
+0.0223
+0.0124
+0.0322
+0.0149
+幻灯片
+0.0894
+0.0541
+0.1236
+0.0627
+0.0615
+0.0340
+0.0927
+0.0417
+0.1779
+0.1114
+0.2217
+0.1224
+0.0513
+0.0293
+0.0719
+0.0344
+原始
+0.0557
+0.0345
+0.0753
+0.0395
+0.0119
+0.0049
+0.0257
+0.0082
+0.1592
+0.0997
+0.1976
+0.1094
+0.0250
+0.0149
+0.0349
+0.0174
+多
+BCE
+前缀
+0.0620
+0.0331
+0.0908
+0.0403
+0.0309
+0.0161
+0.0474
+0.0203
+0.1245
+0.0706
+0.1714
+0.0825
+0.0633
+0.0375
+0.0982
+0.0461
+后缀
+0.0658
+0.0359
+0.0974
+0.0439
+0.0309
+0.0170
+0.0478
+0.0213
+0.1301
+0.0763
+0.1709
+0.0866
+0.0532
+0.0281
+0.0835
+0.0356
+滑动
+0.0566
+0.0304
+0.0846
+0.0374
+0.0288
+0.0154
+0.0441
+0.0192
+0.1268
+0.0730
+0.1724
+0.0845
+0.0459
+0.0255
+0.0633
+0.0299
+原始
+0.0607
+0.0331
+0.0926
+0.0411
+0.0326
+0.0175
+0.0507
+0.0221
+0.1316
+0.0758
+0.1796
+0.0879
+0.0642
+0.0366
+0.0982
+0.0452
+CE
+前缀
+0.0722
+0.0440
+0.1000
+0.0510
+0.0366
+0.0212
+0.0543
+0.0256
+0.1555
+0.0979
+0.1964
+0.1082
+0.0606
+0.0355
+0.0853
+0.0418
+后缀
+0.0737
+0.0438
+0.1020
+0.0509
+0.0345
+0.0194
+0.0513
+0.0236
+0.1525
+0.0969
+0.1947
+0.1075
+0.0422
+0.0232
+0.0743
+0.0313
+幻灯片
+0.0811
+0.0502
+0.1086
+0.0571
+0.0444
+0.0266
+0.0632
+0.0313
+0.1583
+0.0986
+0.2006
+0.1093
+0.0459
+0.0294
+0.0651
+0.0343
+原始
+0.0930
+0.0566
+0.1273
+0.0652
+0.0511
+0.0299
+0.0737
+0.0356
+0.1790
+0.1133
+0.2272
+0.1255
+0.0670
+0.0371
+0.0936
+0.0437
+BSARec
+单个
+BCE
+前缀
+0.0578
+0.0304
+0.0872
+0.0378
+0.0295
+0.0158
+0.0464
+0.0200
+0.1289
+0.0707
+0.1832
+0.0843
+0.0642
+0.0397
+0.0972
+0.0481
+后缀
+0.0503
+0.0286
+0.0715
+0.0339
+0.0208
+0.0107
+0.0305
+0.0131
+0.1143
+0.0688
+0.1495
+0.0777
+0.0138
+0.0078
+0.0239
+0.0103
+幻灯片
+0.0609
+0.0327
+0.0887
+0.0397
+0.0304
+0.0162
+0.0471
+0.0204
+0.1228
+0.0706
+0.1661
+0.0816
+0.0523
+0.0279
+0.0743
+0.0332
+原始
+0.0489
+0.0273
+0.0690
+0.0324
+0.0127
+0.0065
+0.0193
+0.0081
+0.1032
+0.0618
+0.1365
+0.0702
+0.0092
+0.0036
+0.0294
+0.0086
+CE
+前缀
+0.0987
+0.0595
+0.1345
+0.0685
+0.0580
+0.0338
+0.0820
+0.0399
+0.1882
+0.1199
+0.2375
+0.1323
+0.0761
+0.0441
+0.1073
+0.0519
+后缀
+0.0509
+0.0290
+0.0709
+0.0341
+0.0217
+0.0120
+0.0317
+0.0146
+0.1379
+0.0875
+0.1764
+0.0972
+0.0220
+0.0109
+0.0257
+0.0118
+幻灯片
+0.0868
+0.0525
+0.1170
+0.0602
+0.0461
+0.0275
+0.0655
+0.0324
+0.1795
+0.1144
+0.2250
+0.1258
+0.0596
+0.0341
+0.0963
+0.0434
+原始
+0.0569
+0.0349
+0.0781
+0.0402
+0.0233
+0.0143
+0.0333
+0.0168
+0.1569
+0.0981
+0.1996
+0.1088
+0.0211
+0.0104
+0.0349
+0.0139
+多
+BCE
+前缀
+0.0732
+0.0402
+0.1069
+0.0487
+0.0372
+0.0199
+0.0574
+0.0250
+0.1363
+0.0789
+0.1866
+0.0916
+0.0826
+0.0459
+0.1147
+0.0539
+后缀
+0.0745
+0.0425
+0.1057
+0.0503
+0.0346
+0.0188
+0.0535
+0.0236
+0.1419
+0.0845
+0.1843
+0.0951
+0.0615
+0.0304
+0.0982
+0.0395
+幻灯片
+0.0699
+0.0387
+0.0986
+0.0459
+0.0340
+0.0183
+0.0513
+0.0227
+0.1404
+0.0813
+0.1896
+0.0937
+0.0606
+0.0333
+0.0899
+0.0407
+原始
+0.0713
+0.0386
+0.1043
+0.0469
+0.0353
+0.0190
+0.0544
+0.0238
+0.1378
+0.0795
+0.1871
+0.0920
+0.0725
+0.0418
+0.1101
+0.0511
+CE
+前缀
+0.0741
+0.0451
+0.1009
+0.0518
+0.0386
+0.0222
+0.0556
+0.0265
+0.1641
+0.1023
+0.2082
+0.1135
+0.0679
+0.0366
+0.0927
+0.0428
+后缀
+0.0703
+0.0422
+0.0990
+0.0495
+0.0366
+0.0203
+0.0533
+0.0245
+0.1648
+0.1032
+0.2094
+0.1145
+0.0358
+0.0187
+0.0578
+0.0242
+幻灯片
+0.0811
+0.0500
+0.1101
+0.0572
+0.0430
+0.0257
+0.0599
+0.0300
+0.1607
+0.1016
+0.2030
+0.1123
+0.0578
+0.0341
+0.0817
+0.0401
+原始
+0.0827
+0.0503
+0.1171
+0.0589
+0.0474
+0.0268
+0.0689
+0.0322
+0.1683
+0.1070
+0.2107
+0.1177
+0.0771
+0.0444
+0.1073
+0.0520
+它包含75,258名用户、66,443件物品和1,097,592次交互。
+平均序列长度为14.6，稀疏度为99.97%。
+4.2结果分析
+四种具有不同损失函数、拆分方法和目标策略的主干序列推荐模
+型的性能表现如下
+2861
+
+Pay Attention to Sequence Split: Uncovering the Impacts of Sub-Sequence Splitting
+on Sequential Recommendation Models
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+Table 6: The performance of four backbone SR models with different training settings on two large-scale datasets. The best
+performance in each case is highlighted in bolded red and the second-best is highlighted in underlined blue.
+Target
+Loss
+Split
+ML-1M
+CDs
+ML-1M
+CDs
+H@10
+N@10
+H@20
+N@20
+H@10
+N@10
+H@20
+N@20
+H@10
+N@10
+H@20
+N@20
+H@10
+N@10
+H@20
+N@20
+Model
+GRU4Rec
+SASRec
+Single
+BCE
+Prefix
+0.1728
+0.0872
+0.2725
+0.1123
+0.0197
+0.0092
+0.0354
+0.0131
+0.2200
+0.1181
+0.3252
+0.1445
+0.0347
+0.0174
+0.0573
+0.0231
+Suffix
+0.0614
+0.0325
+0.0974
+0.0416
+0.0038
+0.0019
+0.0072
+0.0027
+0.0902
+0.0491
+0.1272
+0.0584
+0.0200
+0.0106
+0.0297
+0.0131
+Silde
+0.1689
+0.0850
+0.2654
+0.1093
+0.0138
+0.0067
+0.0247
+0.0095
+0.2136
+0.1132
+0.3101
+0.1374
+0.0362
+0.0184
+0.0564
+0.0235
+Original
+0.0556
+0.0280
+0.0836
+0.0351
+0.0043
+0.0021
+0.0076
+0.0029
+0.1008
+0.0567
+0.1399
+0.0665
+0.0051
+0.0023
+0.0085
+0.0032
+CE
+Prefix
+0.2675
+0.1494
+0.3685
+0.1749
+0.0661
+0.0352
+0.0987
+0.0434
+0.2937
+0.1697
+0.3944
+0.1951
+0.0918
+0.0515
+0.1289
+0.0609
+Suffix
+0.0608
+0.0321
+0.0937
+0.0404
+0.0142
+0.0082
+0.0210
+0.0099
+0.0848
+0.0499
+0.1185
+0.0583
+0.0221
+0.0122
+0.0317
+0.0146
+Silde
+0.2492
+0.1381
+0.3538
+0.1644
+0.0518
+0.0272
+0.0790
+0.0341
+0.2853
+0.1630
+0.3811
+0.1872
+0.0749
+0.0422
+0.1064
+0.0501
+Original
+0.0566
+0.0276
+0.0882
+0.0357
+0.0111
+0.0057
+0.0179
+0.0074
+0.0934
+0.0539
+0.1310
+0.0634
+0.0283
+0.0158
+0.0403
+0.0188
+Multi
+BCE
+Prefix
+0.2373
+0.1221
+0.3459
+0.1494
+0.0416
+0.0210
+0.0661
+0.0271
+0.2712
+0.1475
+0.3821
+0.1755
+0.0527
+0.0227
+0.0815
+0.0349
+Suffix
+0.1755
+0.0892
+0.2616
+0.1109
+0.0441
+0.0227
+0.0710
+0.0294
+0.1719
+0.0888
+0.2765
+0.1152
+0.0501
+0.0258
+0.0783
+0.0329
+Silde
+0.2550
+0.1345
+0.3719
+0.1639
+0.0341
+0.0166
+0.0562
+0.0222
+0.2353
+0.1283
+0.3376
+0.1541
+0.0402
+0.0209
+0.0640
+0.0268
+Original
+0.1902
+0.0967
+0.2993
+0.1241
+0.0321
+0.0156
+0.0548
+0.0213
+0.2192
+0.1167
+0.3300
+0.1447
+0.0489
+0.0253
+0.0766
+0.0323
+CE
+Prefix
+0.2722
+0.1523
+0.3841
+0.1805
+0.0507
+0.0270
+0.0769
+0.0336
+0.3017
+0.1710
+0.4060
+0.1972
+0.0645
+0.0348
+0.0947
+0.0424
+Suffix
+0.1538
+0.0789
+0.2356
+0.0995
+0.0445
+0.0241
+0.0660
+0.0295
+0.1942
+0.1040
+0.2838
+0.1266
+0.0457
+0.0238
+0.0695
+0.0297
+Silde
+0.2942
+0.1654
+0.4109
+0.1948
+0.1108
+0.0689
+0.1419
+0.0768
+0.2783
+0.1524
+0.3886
+0.1802
+0.0733
+0.0415
+0.1030
+0.0490
+Original
+0.2382
+0.1292
+0.3434
+0.1557
+0.0489
+0.0260
+0.0743
+0.0324
+0.2818
+0.1567
+0.3838
+0.1824
+0.0915
+0.0512
+0.1293
+0.0607
+Model
+FMLPRec
+BSARec
+Single
+BCE
+Prefix
+0.2048
+0.1057
+0.3166
+0.1338
+0.0455
+0.0230
+0.0720
+0.0296
+0.2141
+0.1115
+0.3209
+0.1383
+0.0438
+0.0225
+0.0698
+0.0290
+Suffix
+0.1151
+0.0648
+0.1680
+0.0782
+0.0283
+0.0153
+0.0413
+0.0186
+0.0995
+0.0553
+0.1485
+0.0677
+0.0260
+0.0143
+0.0386
+0.0175
+Silde
+0.2058
+0.1074
+0.3174
+0.1354
+0.0455
+0.0234
+0.0715
+0.0299
+0.1969
+0.1043
+0.2977
+0.1296
+0.0433
+0.0224
+0.0683
+0.0287
+Original
+0.0993
+0.0553
+0.1450
+0.0669
+0.0054
+0.0026
+0.0088
+0.0034
+0.1000
+0.0557
+0.1430
+0.0664
+0.0052
+0.0026
+0.0090
+0.0036
+CE
+Prefix
+0.2859
+0.1611
+0.3970
+0.1890
+0.0968
+0.0535
+0.1379
+0.0639
+0.2639
+0.1486
+0.3684
+0.1749
+0.0972
+0.0537
+0.1377
+0.0639
+Suffix
+0.1076
+0.0623
+0.1455
+0.0718
+0.0276
+0.0151
+0.0408
+0.0184
+0.0970
+0.0559
+0.1391
+0.0664
+0.0294
+0.0161
+0.0425
+0.0194
+Silde
+0.2742
+0.1496
+0.3834
+0.1771
+0.0806
+0.0449
+0.1152
+0.0537
+0.2704
+0.1512
+0.3679
+0.1757
+0.0853
+0.0475
+0.1216
+0.0566
+Original
+0.1043
+0.0613
+0.1427
+0.0709
+0.0324
+0.0183
+0.0463
+0.0218
+0.0977
+0.0573
+0.1425
+0.0686
+0.0353
+0.0202
+0.0503
+0.0240
+Multi
+BCE
+Prefix
+0.2440
+0.1324
+0.3530
+0.1598
+0.0536
+0.0276
+0.0830
+0.0350
+0.2142
+0.1123
+0.3222
+0.1395
+0.0586
+0.0307
+0.0905
+0.0388
+Suffix
+0.1719
+0.0888
+0.2765
+0.1152
+0.0526
+0.0276
+0.0800
+0.0345
+0.1896
+0.0999
+0.2874
+0.1245
+0.0605
+0.0324
+0.0897
+0.0398
+Silde
+0.2228
+0.1196
+0.3235
+0.1450
+0.0419
+0.0216
+0.0650
+0.0274
+0.2159
+0.1140
+0.3293
+0.1425
+0.0467
+0.0238
+0.0743
+0.0308
+Original
+0.2108
+0.1121
+0.3214
+0.1399
+0.0497
+0.0258
+0.0772
+0.0327
+0.1987
+0.1041
+0.2975
+0.1289
+0.0543
+0.0287
+0.0825
+0.0358
+CE
+Prefix
+0.2659
+0.1462
+0.3714
+0.1727
+0.0637
+0.0342
+0.0939
+0.0418
+0.2020
+0.1077
+0.2962
+0.1315
+0.0631
+0.0352
+0.0892
+0.0418
+Suffix
+0.1964
+0.1038
+0.2851
+0.1260
+0.0461
+0.0245
+0.0681
+0.0300
+0.1949
+0.1053
+0.2757
+0.1255
+0.0524
+0.0290
+0.0763
+0.0350
+Silde
+0.2480
+0.1376
+0.3488
+0.1630
+0.0733
+0.0415
+0.1030
+0.0490
+0.2348
+0.1317
+0.3325
+0.1563
+0.0753
+0.0425
+0.1074
+0.0505
+Original
+0.2654
+0.1443
+0.3705
+0.1709
+0.0901
+0.0507
+0.1276
+0.0602
+0.2079
+0.1166
+0.3050
+0.1410
+0.0778
+0.0438
+0.1087
+0.0515
+Beauty
+Sports
+LastFM
+ML-1M
+0
+50
+100
+150
+200
+250
+300
+Improvement Percentage (%)
+SASRec (BSARec Paper)
+FMLPRec (BSARec Paper)
+BSARec (BSARec Paper)
+SASRec (Our Results)
+FMLPRec (Our Results)
+BSARec (Our Results)
+Figure 2: Average performance improvements compared to
+the GRU4Rec reported in the BSARec [58] paper.
+Table 5 (four small-scale datasets) and 6 (two large-scale datasets).
+From the results, we have the following observations and analysis:
+(1) Overall, the multi-target strategy outperforms the single-
+target strategy because the former provides more supervision sig-
+nals from earlier positions in the sequence, enabling the model
+to learn user preference knowledge and behavioral patterns more
+comprehensively. Regarding loss functions, CE loss outperforms
+BCE loss overall. The former, when paired with the probability dis-
+tribution of the entire item set output by softmax, supports ranking
+and better aligns with the multi-class next-item prediction task
+in sequential recommendation. Among splitting methods, prefix
+splitting performs better overall than suffix splitting and the sliding
+window. When employing the single-target strategy (particularly in
+combination with BCE loss), all three methods achieve significant
+performance gains over the original model without SSS. Never-
+theless, when employing the multi-target strategy with CE loss,
+all three approaches yield negligible gains and may even degrade
+performance. This occurs because every interaction potentially eli-
+gible as a target participates in training, with ranking optimization
+applied across the entire item set. Consequently, incorporating SSS
+offers limited benefits in such scenarios.
+(2) From a model perspective, GRU4Rec achieves the best per-
+formance on CDs, SASRec wins on ML-1M, FMLPRec achieves the
+best performance on Sports and LastFM datasets, while BSARec
+performs best on Beauty and Douyin. Appropriate settings can
+enable earlier models to outperform the recently proposed models.
+Furthermore, if we consider only optimal performance, the per-
+formance differences are far more minor than those reported in
+the paper. Taking BSARec as an example [58], we present the av-
+erage percentage improvement in model performance reported in
+BSARec, along with our newly achieved best performance relative
+to the GRU4Rec model described in the BSARec paper. The results
+are shown in Table 26. Our results show that the performance gap
+between models has narrowed significantly. Notably, BSARec’s ad-
+vantage is no longer as pronounced as reported in the paper, further
+corroborating the interference of SSS in performance evaluation
+and its immense potential to enhance recommendation accuracy.
+6Following the experimental setup in the BSARec paper [58], we compared the per-
+formance differences of the models across the Beauty, Sports, LastFM, and ML-1M
+datasets. The BSARec paper did not utilize Douyin and CDs.
+2862
+注意序列分割：揭示子序列分割对序列推荐模型的影响
+SIGIR’26，2026年7月20日至24日，墨尔本，维多利亚州，澳大利亚
+表6：四种具有不同训练设置的主干SR模型在两个大规模数据集上的性能。每种情况下的最佳性能以加粗红色突出显示，第二好的性能
+以蓝色下划线突出显示。
+目标损失
+分割
+ML‑1M
+CDs
+ML‑1M
+CDs
+H@10
+N@10
+H@20
+N@20
+H@10
+N@10
+H@20
+N@20
+H@10
+N@10
+H@20
+N@20
+H@10
+N@10
+H@20
+N@20
+模型
+GRU4Rec
+SASRec
+单
+BCE
+前缀
+0.1728
+0.0872
+0.2725
+0.1123
+0.0197
+0.0092
+0.0354
+0.0131
+0.2200
+0.1181
+0.3252
+0.1445
+0.0347
+0.0174
+0.0573
+0.0231
+后缀
+0.0614
+0.0325
+0.0974
+0.0416
+0.0038
+0.0019
+0.0072
+0.0027
+0.0902
+0.0491
+0.1272
+0.0584
+0.0200
+0.0106
+0.0297
+0.0131
+幻灯片
+0.1689
+0.0850
+0.2654
+0.1093
+0.0138
+0.0067
+0.0247
+0.0095
+0.2136
+0.1132
+0.3101
+0.1374
+0.0362
+0.0184
+0.0564
+0.0235
+原始
+0.0556
+0.0280
+0.0836
+0.0351
+0.0043
+0.0021
+0.0076
+0.0029
+0.1008
+0.0567
+0.1399
+0.0665
+0.0051
+0.0023
+0.0085
+0.0032
+CE
+前缀
+0.2675
+0.1494
+0.3685
+0.1749
+0.0661
+0.0352
+0.0987
+0.0434
+0.2937
+0.1697
+0.3944
+0.1951
+0.0918
+0.0515
+0.1289
+0.0609
+后缀
+0.0608
+0.0321
+0.0937
+0.0404
+0.0142
+0.0082
+0.0210
+0.0099
+0.0848
+0.0499
+0.1185
+0.0583
+0.0221
+0.0122
+0.0317
+0.0146
+幻灯片
+0.2492
+0.1381
+0.3538
+0.1644
+0.0518
+0.0272
+0.0790
+0.0341
+0.2853
+0.1630
+0.3811
+0.1872
+0.0749
+0.0422
+0.1064
+0.0501
+原始
+0.0566
+0.0276
+0.0882
+0.0357
+0.0111
+0.0057
+0.0179
+0.0074
+0.0934
+0.0539
+0.1310
+0.0634
+0.0283
+0.0158
+0.0403
+0.0188
+多
+BCE
+前缀
+0.2373
+0.1221
+0.3459
+0.1494
+0.0416
+0.0210
+0.0661
+0.0271
+0.2712
+0.1475
+0.3821
+0.1755
+0.0527
+0.0227
+0.0815
+0.0349
+后缀
+0.1755
+0.0892
+0.2616
+0.1109
+0.0441
+0.0227
+0.0710
+0.0294
+0.1719
+0.0888
+0.2765
+0.1152
+0.0501
+0.0258
+0.0783
+0.0329
+Silde
+0.2550
+0.1345
+0.3719
+0.1639
+0.0341
+0.0166
+0.0562
+0.0222
+0.2353
+0.1283
+0.3376
+0.1541
+0.0402
+0.0209
+0.0640
+0.0268
+原始
+0.1902
+0.0967
+0.2993
+0.1241
+0.0321
+0.0156
+0.0548
+0.0213
+0.2192
+0.1167
+0.3300
+0.1447
+0.0489
+0.0253
+0.0766
+0.0323
+CE
+前缀
+0.2722
+0.1523
+0.3841
+0.1805
+0.0507
+0.0270
+0.0769
+0.0336
+0.3017
+0.1710
+0.4060
+0.1972
+0.0645
+0.0348
+0.0947
+0.0424
+后缀
+0.1538
+0.0789
+0.2356
+0.0995
+0.0445
+0.0241
+0.0660
+0.0295
+0.1942
+0.1040
+0.2838
+0.1266
+0.0457
+0.0238
+0.0695
+0.0297
+Silde
+0.2942
+0.1654
+0.4109
+0.1948
+0.1108
+0.0689
+0.1419
+0.0768
+0.2783
+0.1524
+0.3886
+0.1802
+0.0733
+0.0415
+0.1030
+0.0490
+原始
+0.2382
+0.1292
+0.3434
+0.1557
+0.0489
+0.0260
+0.0743
+0.0324
+0.2818
+0.1567
+0.3838
+0.1824
+0.0915
+0.0512
+0.1293
+0.0607
+模型
+FMLPRec
+BSARec
+单
+BCE
+前缀
+0.2048
+0.1057
+0.3166
+0.1338
+0.0455
+0.0230
+0.0720
+0.0296
+0.2141
+0.1115
+0.3209
+0.1383
+0.0438
+0.0225
+0.0698
+0.0290
+后缀
+0.1151
+0.0648
+0.1680
+0.0782
+0.0283
+0.0153
+0.0413
+0.0186
+0.0995
+0.0553
+0.1485
+0.0677
+0.0260
+0.0143
+0.0386
+0.0175
+Silde
+0.2058
+0.1074
+0.3174
+0.1354
+0.0455
+0.0234
+0.0715
+0.0299
+0.1969
+0.1043
+0.2977
+0.1296
+0.0433
+0.0224
+0.0683
+0.0287
+原始
+0.0993
+0.0553
+0.1450
+0.0669
+0.0054
+0.0026
+0.0088
+0.0034
+0.1000
+0.0557
+0.1430
+0.0664
+0.0052
+0.0026
+0.0090
+0.0036
+CE
+前缀
+0.2859
+0.1611
+0.3970
+0.1890
+0.0968
+0.0535
+0.1379
+0.0639
+0.2639
+0.1486
+0.3684
+0.1749
+0.0972
+0.0537
+0.1377
+0.0639
+后缀
+0.1076
+0.0623
+0.1455
+0.0718
+0.0276
+0.0151
+0.0408
+0.0184
+0.0970
+0.0559
+0.1391
+0.0664
+0.0294
+0.0161
+0.0425
+0.0194
+Silde
+0.2742
+0.1496
+0.3834
+0.1771
+0.0806
+0.0449
+0.1152
+0.0537
+0.2704
+0.1512
+0.3679
+0.1757
+0.0853
+0.0475
+0.1216
+0.0566
+原始
+0.1043
+0.0613
+0.1427
+0.0709
+0.0324
+0.0183
+0.0463
+0.0218
+0.0977
+0.0573
+0.1425
+0.0686
+0.0353
+0.0202
+0.0503
+0.0240
+多
+BCE
+前缀
+0.2440
+0.1324
+0.3530
+0.1598
+0.0536
+0.0276
+0.0830
+0.0350
+0.2142
+0.1123
+0.3222
+0.1395
+0.0586
+0.0307
+0.0905
+0.0388
+后缀
+0.1719
+0.0888
+0.2765
+0.1152
+0.0526
+0.0276
+0.0800
+0.0345
+0.1896
+0.0999
+0.2874
+0.1245
+0.0605
+0.0324
+0.0897
+0.0398
+Silde
+0.2228
+0.1196
+0.3235
+0.1450
+0.0419
+0.0216
+0.0650
+0.0274
+0.2159
+0.1140
+0.3293
+0.1425
+0.0467
+0.0238
+0.0743
+0.0308
+原始
+0.2108
+0.1121
+0.3214
+0.1399
+0.0497
+0.0258
+0.0772
+0.0327
+0.1987
+0.1041
+0.2975
+0.1289
+0.0543
+0.0287
+0.0825
+0.0358
+CE
+前缀
+0.2659
+0.1462
+0.3714
+0.1727
+0.0637
+0.0342
+0.0939
+0.0418
+0.2020
+0.1077
+0.2962
+0.1315
+0.0631
+0.0352
+0.0892
+0.0418
+后缀
+0.1964
+0.1038
+0.2851
+0.1260
+0.0461
+0.0245
+0.0681
+0.0300
+0.1949
+0.1053
+0.2757
+0.1255
+0.0524
+0.0290
+0.0763
+0.0350
+Silde
+0.2480
+0.1376
+0.3488
+0.1630
+0.0733
+0.0415
+0.1030
+0.0490
+0.2348
+0.1317
+0.3325
+0.1563
+0.0753
+0.0425
+0.1074
+0.0505
+原始
+0.2654
+0.1443
+0.3705
+0.1709
+0.0901
+0.0507
+0.1276
+0.0602
+0.2079
+0.1166
+0.3050
+0.1410
+0.0778
+0.0438
+0.1087
+0.0515
+美
+运动
+LastFM
+ML‑1M
+0
+50
+100
+150
+200
+250
+300
+Improvement Percentage (%)
+SASRec（BSARec论文）
+FMLPRec(BSARec论文)
+BSARec(BSARec论文)
+SASRec(我们的结果)
+FMLPRec(我们的结果)
+BSARec(我们的结果)
+图2：与GRU4Rec相比，BSARec [58]论文中报告的平均性能提
+升。
+表5（四个小规模数据集）和表6（两个大规模数据集）。从结果中，
+我们得出以下观察和分析：
+(1)总体而言，多目标策略优于单目标策略，因为前者从
+序列更早的位置提供了更多监督信号，使模型能够更全面地学
+习用户偏好知识和行为模式。关于损失函数，交叉熵损失（
+CEloss）总体上优于二元交叉熵损失（BCEloss）。前者与
+softmax输出的整个物品集的概率分布相结合时，支持排序，
+并且更好地与序列推荐中的多类别下一物品预测任务相匹配。
+在分割方法中，前缀分割总体上优于后缀分割和滑动窗口。当
+采用单目标策略（尤其是在与BCE损失结合时），三种方法在
+原始无序列分割（SSS）的模型上均实现了显著的性能提升。
+然而，当采用交叉熵损失的多目标策略时，
+三种方法带来的收益微乎其微，甚至可能降低性能。这种情况
+发生是因为每个潜在的交互目标都参与了训练，并在整个物品
+集上应用了排序优化。因此，在这种情况下，引入序列分割
+（SSS）带来的好处有限。
+(2)从模型角度来看，GRU4Rec在CD数据集上表现最
+佳，SASRec在ML‑1M数据集上表现最佳，FMLPRec在
+Sports和LastFM数据集上表现最佳，而BSARec在
+Beauty和抖音数据集上表现最佳。适当的设置可以使早期模
+型超越最近提出的模型。此外，如果我们仅考虑最佳性能，那
+么模型之间的性能差异远小于论文中报告的差异。以
+BSARec为例[58], ，我们展示了BSARec中报告的模型性能
+平均提升百分比，以及相对于BSARec论文中描述的
+GRU4Rec模型的最佳性能。结果如表 26所示。我们的结果
+表明，模型之间的性能差距已显著缩小。值得注意的是，
+BSARec的优势不再像论文中报告的那样突出，这进一步证实
+了子序列分割对性能评估的干扰及其提升推荐准确性的巨大潜
+力。
+6根据BSARec论文中的实验设置[58], ，我们比较了模型在Beauty、Sports、
+LastFM和ML‑1M数据集上的性能差异。BSARec论文未使用抖音和CDs。
+2862
+
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+Yizhou Dang, et al.
+Table 7: The maximum performance differences (the average
+improvement of the best case relative to the worst).
+Mtehod
+Beauty
+Sports
+Douyin
+LastFM
+ML-1M
+CDs
+GRU4Rec 424.53% 275.43% 460.78% 425.16% 441.59% 2493.27%
+SASRec
+109.63% 426.77%
+74.09%
+477.22% 244.83% 1764.68%
+FMLPRec 118.84% 568.24%
+83.68%
+595.48% 183.88% 1724.19%
+BSARec
+106.53% 373.54%
+84.71%
+697.43% 169.59% 1709.90%
+(3) The performance variations resulting from different settings
+applied to the same model are significant. Table 7 presents the maxi-
+mum performance differences (the average improvement of the best
+case relative to the worst) for each model on each dataset, revealing
+substantial disparities. On the largest CD dataset, the best perfor-
+mance of the same model outperformed its worst performance by
+nearly 17 times, with the greatest improvement reaching up to
+24 times. Therefore, selecting appropriate target strategies, split-
+ting methods (and loss functions), or conducting comprehensive
+experiments and evaluations under different settings are necessary.
+(4) Finally, we further tally the number of times each setting
+secured the championship and runner-up positions in Figure 3.
+We observe that single-target, CE loss, with the prefix SSS & slid-
+ing window, achieves the best performance, followed by the two
+multi-target settings. The remaining settings yield fewer total times.
+Therefore, in practice, we recommend that researchers prioritize
+training models using these well-performed settings.
+5
+Why is SSS Effective
+In this section, we analyze why SSS is effective from the perspective
+of reshaping the distribution of the training data.
+Target Probability Distributions. Inspired by the previous work
+[33, 95], we visualize the target distributions with different splitting
+methods and target strategies in Figure 4, i.e., normalized frequency
+with which each item appears as the prediction target during train-
+ing. From the perspective of splitting methods, all three approaches
+can achieve a more balanced distribution of targets. Without split-
+ting, a few high-frequency items have extremely high probabilities,
+while most items have extremely low or even zero probabilities.
+After applying SSS, more items have the opportunity to be selected
+as targets (the number of circles, triangles, and stars is greater than
+that of squares). This directly provides the model training with
+more supervisory signals, enabling it to learn more comprehensive
+user preferences and transition patterns. From the perspective of
+target strategies, a multi-target strategy largely compensates for
+the scarcity of target items that arises from a single-target strategy.
+Consequently, under the multi-target strategy, the differences of
+overall target distributions for the original data and the three split-
+ting methods become smaller. However, splitting methods can still
+improve the target probabilities of different items to some extent.
+Input-Target distributions. Furthermore, we demonstrate the
+number of inputs associated with each target under different split-
+ting methods and target strategies [33]. The results are presented
+in Figure 5. We can observe that all three splitting methods signifi-
+cantly increase the number of inputs for each target compared to
+the original data. This quantitative improvement further enhances
+the model’s ability to generalize the mapping from inputs to tar-
+gets, enabling it to deliver more accurate recommendation results.
+48.2%
+17.9%
+8.3%
+7.1%
+18.5%
+Total: 168 times
+Single-CE-Prefix
+(81 times, 48.2%)
+Single-CE-Slide
+(30 times, 17.9%)
+Multi-BCE-Prefix
+(14 times, 8.3%)
+Multi-CE-Slide
+(12 times, 7.1%)
+Others (Less than 10)
+(31 times, 18.5%)
+Figure 3: The number of times different settings achieve the
+best performance and the second-best performance.
+Without SSS, numerous items possess only sparse inputs, while
+only a handful of high-frequency items accumulate substantial in-
+put sequences. Consequently, the model can only learn to predict
+these few high-frequency items, while its prediction performance
+for the much larger number of low-frequency items remains prob-
+lematic. Compared with the single-target strategy, the multi-target
+strategy can further increase the number of inputs per target. This
+enhances input-target diversity, enabling the model to learn more
+comprehensive patterns of user preferences. However, as shown
+in Figure 3, the multi-target strategy sometimes performs worse
+than the single-target strategy. This may be because the former
+fails to enhance the diversity of input-target pairs beyond the SSS,
+merely increasing the number of similar pairs. In addition, under
+the multi-target strategy, both prefix SSS and suffix SSS yield more
+input-target pairs than the sliding window. However, based on
+results from Table 5 and Table 6, prefix SSS demonstrates signif-
+icantly superior overall performance compared to suffix SSS. We
+attribute this to prefix SSS’s greater alignment with the temporal
+accumulation and repetition pattern of user behavior from past to
+present [34, 76]. As this falls outside the work’s primary focus, we
+will continue to explore it in the future.
+6
+Discussion
+The Impact of SSS and Suggestions for Mitigation. Our work
+demonstrates how SSS can distort researchers’ evaluations of the
+sequential recommendation models’ actual performance. Many re-
+cently proposed models may unknowingly incorporate SSS during
+implementation, leading to falsely high performance. Although our
+evaluation selected only basic SR backbone models, the impact of
+SSS may extend far beyond this. Since many SR subdomain meth-
+ods are based on these fundamental backbones, their implementa-
+tions may also directly inherit code containing SSS. For example,
+multi-modal recommendation methods may utilize these models
+to encode ID sequences [24, 51], while cross-domain recommenda-
+tion models may employ them to capture user preferences within
+a single domain [39, 74]. The impact of SSS will correspondingly
+affect our evaluation of the actual performance of them. In light of
+this situation, we provide the following practical suggestions:
+• Researchers are advised to carefully examine existing open-source
+codes and projects they used when implementing their new mod-
+els, ensuring that all baselines and proposed methods use iden-
+tical splitting methods, target strategies, and other training set-
+tings. These settings should be incorporated into the code with
+full knowledge of their implications.
+• Whether SSS is employed, the specific SSS used, and the target
+strategies (along with other settings) should all be presented as
+2863
+SIGIR’26，2026年7月20日至24日，墨尔本，维多利亚州，澳大利亚
+党宇舟等
+表7：最大性能差异（最佳情况相对于最差情况的平均改进）。
+方法
+美式
+运动
+抖音
+LastFM
+ML‑1M
+CDs
+GRU4Rec
+424.53%
+275.43%
+460.78%
+425.16%
+441.59%
+2493.27%
+SASRec
+109.63%
+426.77%
+74.09%
+477.22%
+244.83%
+1764.68%
+FMLPRec
+118.84%
+568.24%
+83.68%
+595.48%
+183.88%
+1724.19%
+BSARec
+106.53%373.54%
+84.71%
+697.43%169.59%1709.90%
+(3)对同一模型应用不同设置所导致的性能变化非常显著。
+表7展示了每个模型在每个数据集上的最大性能差异（最佳
+情况相对于最差的平均提升），揭示了巨大差异。在最大的
+CD数据集上，同一模型的最佳性能比最差性能高出近17倍，
+最大提升甚至达到24倍。因此，选择适当的靶向策略、分割
+方法（和损失函数），或在不同设置下进行综合实验和评估是
+必要的。
+(4)最后，我们在图3中进一步统计了每个设置获得冠军
+和亚军次数的次数。我们观察到，单目标、CE损失、带有前
+缀SSS&滑动窗口的设置表现最佳，其次是多目标设置。其
+余设置获得的次数较少。因此，在实际应用中，我们建议研究
+人员优先使用这些表现良好的设置来训练模型。
+5为什么SSS有效
+在本节中，我们从重塑训练数据分布的角度分析了SSS为何有效。
+目标概率分布。受先前工作[33, 95], 的启发，我们使用图4可视
+化了不同拆分方法和目标策略下的目标分布，即每个物品在训
+练过程中作为预测目标出现的归一化频率。从拆分方法的角度
+来看，这三种方法都能实现更均衡的目标分布。不进行拆分时，
+少数高频物品具有极高的概率，而大多数物品的概率极低甚至
+为零。应用SSS后，更多物品有机会被选为目标（圆形、三角
+形和星形的数量多于方形）。这直接为模型训练提供了
+提供更多监督信号，使其能够学习更全面的用户偏好和转换模
+式。从目标策略的角度来看，多目标策略在很大程度上弥补了
+单目标策略中目标物品稀缺的问题。因此，在多目标策略下，
+原始数据和三种拆分方法的整体目标分布差异变得更小。然而，
+拆分方法仍然可以在一定程度上提高不同物品的目标概率。
+输入‑目标分布。此外，我们展示了在不同拆分方法和目标策
+略下，每个目标关联的输入数量[33]。结果如图5所示。我们
+可以观察到，与原始数据相比，所有三种拆分方法都显著增加
+了每个目标的输入数量。这种定量改进进一步增强了模型从输
+入到目标的映射泛化能力，使其能够提供更准确的推荐结果。
+48.2%
+17.9%
+8.3%
+7.1%
+18.5%
+总计：168次
+单CE前缀
+(81次，48.2%)
+单CE滑动
+(30次，17.9%)
+多
+-BCE-前缀
+(14次，8.3%)
+Multi‑CE‑Slide
+(12次，7.1%)
+其他（少于10）
+(31次，18.5%)
+图3：不同设置达到最佳性能和次佳性能的次数。
+在不使用子序列拆分（SSS）的情况下，许多物品只有稀疏的
+输入，而只有少数高频物品积累了大量的输入序列。因此，模
+型只能学习预测这些少数高频物品，而其对于数量庞大的低频
+物品的预测性能仍然存在问题。与单目标策略相比，多目标策
+略可以进一步增加每个目标的输入数量。这增强了输入‑目标
+的多样性，使模型能够学习更全面的用户偏好模式。然而，如
+图3所示，多目标策略有时表现不如单目标策略。这可能是由
+于前者未能超越SSS增强输入‑目标对的多样性，仅仅增加了相
+似对的数量。此外，在多目标策略下，前缀SSS和后缀SSS产
+生的输入‑目标对都比滑动窗口多。但是，根据表5和表6的结
+果，前缀SSS的整体性能明显优于后缀SSS。我们归因于前缀
+SSS与用户行为从过去到现在的时序积累和重复模式更一致
+[34, 76]。由于这超出了本研究的主要关注点，我们将在未来继
+续探索。
+6讨论
+SSS的影响及缓解建议。我们的研究表明，SSS如何扭曲研究
+人员对序列推荐模型实际性能的评估。许多最近提出的模型可
+能在实现过程中不知不觉地引入了SSS，导致性能被虚高。尽
+管我们的评估仅选择了基本的SR主干模型，但SSS的影响可能
+远不止于此。由于许多SR子域方法基于这些基础主干模型，
+它们的实现也可能直接继承包含SSS的代码。例如，多模态推
+荐方法可能利用这些模型对ID序列[24, 51], 进行编码，而跨域
+推荐模型可能使用它们来捕获单个域内的用户偏好[39, 74]。
+SSS的影响将相应地影响我们对它们实际性能的评估。针对这
+种情况，我们提出以下实际建议：
+• 研究人员被建议仔细检查在实现其新模型时使用的现有开源
+代码和项目，确保所有基线和提出的方法使用相同的拆分方法、
+目标策略和其他训练设置。这些设置应充分了解其影响，并纳
+入代码中。
+• 无论是否采用SSS，所使用的具体SSS以及目标策略（以及其他
+设置）都应作为
+2863
+
+Pay Attention to Sequence Split: Uncovering the Impacts of Sub-Sequence Splitting
+on Sequential Recommendation Models
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+10
+6
+10
+5
+10
+4
+10
+3
+10
+2
+100
+101
+102
+103
+Count
+Beauty - Single-Target
+10
+6
+10
+5
+10
+4
+10
+3
+10
+2
+Beauty - Multi-Target
+10
+6
+10
+5
+10
+4
+10
+3
+10
+2
+Target Probability
+100
+101
+102
+Count
+ML-1M - Single-Target
+10
+6
+10
+5
+10
+4
+10
+3
+10
+2
+Target Probability
+ML-1M - Multi-Target
+Original
+Prefix SSS
+Suffix SSS
+Sliding Window
+Figure 4: Illustration of target distributions with different
+splitting methods and target strategies.
+100
+101
+102
+101
+102
+103
+Count
+Beauty - Single-Target
+100
+101
+102
+103
+Beauty - Multi-Target
+100
+101
+102
+103
+Number of Inputs Per Target
+101
+102
+Count
+ML-1M - Single-Target
+101
+103
+105
+Number of Inputs Per Target
+ML-1M - Multi-Target
+Original
+Prefix SSS
+Suffix SSS
+Sliding Window
+Figure 5: Illustration of input-target distributions with dif-
+ferent splitting methods and target strategies.
+part of the implementation details in the paper. This enables
+readers to more fairly and rigorously reproduce the results in the
+paper or use them as a baseline for comparison.
+• Another option worth considering is conducting a comprehensive
+evaluation of proposed methods across diverse configurations,
+particularly for foundational SR backbones. They are more likely
+to serve as the core building blocks for subsequent work. As
+shown in Tables 5, 6, and Figure 3, the models’ performance may
+vary significantly under different training settings.
+Following the above suggestions will help reduce the interference
+of SSS in evaluating the actual performance of models, further
+preventing its propagation into more ongoing or future research and
+code projects. Additionally, exploring SSS-related training settings
+may also help us further unlock the potential of existing models.
+Insights for Data Augmentation Methods. The value of data
+augmentation lies not in merely expanding sample size or applying
+heuristic perturbations to individual samples, but in strategically
+reshaping the statistical distribution of training data. This insight
+has been validated by the recommendation performance and vi-
+sualization results delivered by SSS. The reason SSS significantly
+improves model performance lies in its ability to achieve a more bal-
+anced target distribution through prefix SSS, suffix SSS, or sliding
+window. These approaches increases exposure opportunities for
+low-frequency items while enriching the diversity of input-target
+pairs (matching more effective contexts to the same target), rather
+than merely increasing sample quantity. Future data augmenta-
+tion methods should also focus on optimizing the distribution of
+training data. This involves learning more comprehensive user pref-
+erences by adjusting the bias distribution of original data [4, 75], or
+adapting to new distributions in the testing phase [66, 89], rather
+than limiting efforts to perturbations and augmentations of indi-
+vidual samples. Developing more efficient DA methods based on
+the analysis in this work is also one of our areas of interest.
+Beyond SR, Limitations, and Future Work. In the field of rec-
+ommender systems, numerous studies have focused on the repro-
+ducibility of papers and models. Such work primarily examines
+whether the results reported in papers can be replicated or whether
+novel approaches demonstrate progress over classical methods
+[18, 56]. However, factors that appear commonplace yet signifi-
+cantly impact model performance (such as SSS in our work) remain
+largely unexplored. In our work, we focus solely on the impact of
+SSS, a ubiquitous yet often overlooked factor, on the performance of
+sequential recommendation models. We also observe that a single
+factor can lead to phantom progress [18] across numerous models.
+Therefore, future research should place greater emphasis on investi-
+gating these seemingly ordinary factors. These studies should not be
+confined solely to SR but can be progressively extended to domains
+such as cross-domain recommendation [82], multi-modal recom-
+mendation [44], and large language models based recommendation
+[30, 31, 43, 86, 93], etc. Investigating and analyzing these factors
+will not only facilitate fair and rigorous model evaluation but also
+potentially aid in discovering and proposing new methodologies.
+Additionally, we can observe that some earlier models can out-
+perform the recently proposed models when appropriate training
+settings are selected. However, our research does not advocate
+abandoning the study of new models. Previous work has demon-
+strated that complex models yield significant results in practical
+applications [1], underscoring the need for continued research of
+new architectures. Moreover, our work does not provide a theo-
+retical analysis of how splitting methods, target strategies, and
+loss functions influence data distribution and model performance.
+Consequently, developing a unified theoretical framework that in-
+tegrates these factors represents another area of interest for us.
+7
+Related Work
+Sequential Recommendation. SR learns user preferences from
+their behavior sequences and provides personalized suggestions
+[10, 35, 83, 87]. Early works used Markov Chains to predict the
+next item based on the most recent few interactions [21, 55]. Later,
+researchers adopted RNNs [54] to capture the relationships among
+items. GRU4Rec [23] trained a Gated Recurrent Unit (GRU) to model
+the evolution of user interests. However, RNNs suffer from the draw-
+back of poor parallelizability. Thus, researchers used CNNs to learn
+sequential patterns [63] or model the dependencies in sequences
+[80]. More recently, a series of attention-based models emerged
+2864
+注意序列分割：揭示子序列分割对序列推荐模型的影响
+SIGIR’26，2026年7月20日至24日，墨尔本，维多利亚州，澳大利亚
+10
+6
+10
+5
+10
+4
+10
+3
+10
+2
+100
+101
+102
+103
+Count
+美‑单目标
+10
+6
+10
+5
+10
+4
+10
+3
+10
+2
+美‑多目标
+10
+6
+10
+5
+10
+4
+10
+3
+10
+2
+目标概率
+100
+101
+102
+Count
+ML‑1M‑单目标
+10
+6
+10
+5
+10
+4
+10
+3
+10
+2
+目标概率
+ML‑1M‑多目标
+原始
+前缀SSS
+后缀SSS
+滑动窗口
+图4：不同分割方法和目标策略的目标分布图示
+100
+101
+102
+101
+102
+103
+Count
+美颜‑单目标
+100
+101
+102
+103
+美颜‑多目标
+100
+101
+102
+103
+每个目标的输入数量
+101
+102
+Count
+ML‑1M‑单目标
+101
+103
+105
+每个目标的输入数量
+ML‑1M‑多目标
+原始
+前缀SSS
+后缀SSS
+滑动窗口
+图5：不同分割方法和目标策略的输入-目标分布图示
+论文中的实现细节进行呈现。这使读者能够更公平、更严格
+地复现论文中的结果，或将其用作比较的基线。
+• 另一个值得考虑的选项是针对不同配置对所提出的方法进行
+全面评估，特别是针对基础序列推荐（SR）骨干网络。它们
+更有可能成为后续工作的核心构建模块。如表5、表6和图3所
+示，在不同训练设置下，模型的性能可能会有显著差异。
+遵循上述建议有助于减少序列子序列（SSS）在评估模型实际
+性能时的干扰，进一步防止其传播到更多正在进行或未来的
+研究和代码项目中。此外，探索与SSS相关的训练设置也可能
+帮助我们进一步挖掘现有模型的潜力。
+数据增强方法洞察。数据增强的价值不在于仅仅扩大样本量或
+对单个样本应用启发式扰动，而在于策略性地重塑训练数据的
+统计分布。这一洞察已通过SSS提供的推荐性能和可视化结果
+得到验证。SSS之所以能显著
+提升模型性能的关键在于其通过前缀SSS、后缀SSS或滑动窗
+口实现更均衡的目标分布的能力。这些方法为低频项提供了更
+多曝光机会，同时丰富了输入‑目标对的多样性（将更有效的
+上下文匹配到同一目标），而不仅仅是增加样本数量。未来的
+数据增强方法也应关注优化训练数据的分布。这包括通过调整
+原始数据的偏差分布[4, 75], 或在测试阶段适应新的分布
+[66, 89], 来学习更全面的用户偏好，而不是将精力局限于对单
+个样本的扰动和增强。基于本工作分析开发更高效的数据增强
+方法也是我们感兴趣的一个领域。
+超越序列推荐（SR）、局限性与未来工作。在推荐系统领域，
+大量研究关注论文和模型的可复现性。这类工作主要考察论文
+中报告的结果是否可以复现，或者新方法是否比经典方法有进
+步[18, 56]。然而，那些看似平常但对模型性能产生显著影响的
+因素（例如我们工作中的SSS）仍largelyunexplored。在我
+们的工作中，我们专注于SSS这一普遍存在但常被忽视的因素
+对序列推荐模型性能的影响。我们还观察到，单个因素可能导
+致众多模型出现虚幻的进步[18] 。因此，未来的研究应更加重
+视调查这些看似普通的因素。这些研究不应仅限于SR，而应
+逐步扩展到跨域推荐[82], 多模态推荐[44], 以及基于大型语言
+模型的推荐[30, 31, 43, 86, 93], 等领域。调查和分析这些因素不
+仅有助于实现公平和严格的模型评估，还可能有助于发现和提
+出新的方法。
+此外，我们还可以观察到，在选择了适当的训练设置时，
+一些早期模型的表现可以优于最近提出的模型。然而，我们的
+研究并不主张放弃对新模型的研究。以往的工作已经证明，复
+杂模型在实际应用中能取得显著成果 [1], ，这突显了持续研
+究新架构的必要性。此外，我们的工作并未对拆分方法、目标
+策略和损失函数如何影响数据分布和模型性能进行理论分析。
+因此，开发一个整合这些因素的统一理论框架，是我们感兴趣
+的另一个领域。
+7相关工作
+序列推荐。SR通过学习用户的行为序列来获取用户偏好，并
+提供个性化建议[10, 35, 83, 87]。早期研究使用马尔可夫链根据
+最近的几次交互来预测下一个项目[21, 55]。后来，研究人员
+采用了RNNs [54] 来捕捉项目之间的关系。GRU4Rec [23] 训
+练了一个门控循环单元（GRU）来模拟用户兴趣的演变。然
+而，RNNs存在并行化能力差的缺点。因此，研究人员使用
+CNNs来学习序列模式[63] 或模拟序列中的依赖关系[80]。最
+近，一系列基于注意力的模型涌现出来
+2864
+
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+Yizhou Dang, et al.
+due to the success of the Transformer [64]. SASRec [26] used multi-
+head self-attention to learn the importance of different interactions.
+STOSA [17] embeds each item as a stochastic Gaussian distribution
+and devised a Wasserstein Self-Attention to characterize item-item
+relationships. Beyond the Transformer, FMLP-Rec [94] proposed
+an all-MLP model with learnable filters for SR. BSARec [58] com-
+bined self-attention with the Fourier Transform to address the
+oversmoothing problem. LRURec [81] introduced linear recurrence
+with matrix diagonalization to capture transition patterns.
+Data Augmentation. Due to the widespread data sparsity in SR,
+many DA methods have been proposed and have made impressive
+progress [7, 8, 12, 91]. Heuristic methods generate new samples
+by randomly perturbing the sequence. Early works include SSS
+[63] and Dropout [62], which split a sequence into multiple sub-
+sequences or discard some items from the original data. With the
+widespread use of contrastive learning in SR, several DA opera-
+tors have been proposed. Such as Crop, Mask, Reorder, Insert, and
+Substitute [38, 47, 60, 71]. Following this idea, many works im-
+proved operators by considering time interval [9], user intents [5],
+and relevance & diversity [14]. Furthermore, ICSRec [52] extracted
+coarse-grain intent signals from all users’ historical interaction (sub-
+)sequences and then used these signals to construct auxiliary learn-
+ing objectives for SR. Due to the limited controllability of heuristics,
+which can yield low-quality augmented data, much works explored
+generative modules to produce new sequence data [79]. DiffASR
+[42] adopted the diffusion model for sequence generation with two
+guide strategies. ASReP [48] and BARec [25] employed a reversely
+transformer to generate pseudo-prior items for short sequences.
+Although previous studies have experimentally demonstrated
+that SSS significantly outperforms other DA methods or analyzed
+the reasons behind SSS’s effectiveness, considering only the tar-
+get strategy and the sliding window [33, 95], the interference of
+SSS on rigorous model evaluation and its effective conditions have
+never been revealed or explored. We show that SSS interferes with
+researchers’ evaluation of SR models’ actual performance through
+comprehensive experiments. Furthermore, we analyze the condi-
+tions under which SSS is effective and the reasons for its effective-
+ness. Based on the analysis results, we provide a discussion and
+insights on rigorous evaluation of SR models and on developing
+more concise and efficient augmentation methods.
+8
+Conclusion
+In this work, we reveal the interference of SSS on the models’ ac-
+tual performance evaluation through extensive experiments and
+analysis. Furthermore, we explore the conditions under which SSS
+is effective from the perspectives of splitting methods, target strate-
+gies, and loss functions. We found that SSS achieves its maximum
+efficacy only when specific settings are employed concurrently.
+Additionally, we analyze why SSS is effective from the perspective
+of the distribution of training data. It evens out the distribution of
+training data while increasing the likelihood that different items are
+targeted. Finally, we provide practical suggestions for addressing
+SSS interference, discuss the development of new DA methods, the
+impact of this work beyond SR, and the limitations of this work.
+In addition to the future directions mentioned in Section 6, we
+also plan to incorporate more types of recommendation methods
+into our analysis. Over the past decade, the entire community has
+made progress in code and data sharing, as well as in ensuring
+reproducibility of results [18, 28, 56]. As an academic community,
+we still have to strive for greater rigor in research practices.
+Acknowledgments
+This research is partially supported by the National Natural Sci-
+ence Foundation of China under Grant No. (62576083, 62432003,
+U25A20431). This research is also supported by the Ministry of
+Education, Singapore, under its Academic Research Fund (AcRF)
+Tier 1 grant, and funded through the SMU-SUTD Internal Research
+Grant Call (SMU-SUTD 2023_02_01), and in part by the Ministry
+of Education, Singapore, under its Academic Research Fund Tier 2
+(Award No. MOE-T2EP201230015). The authors greatly appreciate
+the anonymous reviewers for their valuable comments.
+References
+[1] Vito Walter Anelli, Daniele Malitesta, Claudio Pomo, Alejandro Bellogín, Euge-
+nio Di Sciascio, and Tommaso Di Noia. 2023. Challenging the myth of graph
+collaborative filtering: a reasoned and reproducibility-driven analysis. In RecSys.
+350–361.
+[2] Ilwoong Baek, Mincheol Yoon, Seongmin Park, and Jongwuk Lee. 2025. MUFFIN:
+Mixture of User-Adaptive Frequency Filtering for Sequential Recommendation.
+In CIKM. 119–128.
+[3] Shuqing Bian, Xingyu Pan, Wayne Xin Zhao, Jinpeng Wang, Chuyuan Wang,
+and Ji-Rong Wen. 2023. Multi-modal mixture of experts represetation learning
+for sequential recommendation. In CIKM. 110–119.
+[4] Jiawei Chen, Hande Dong, Yang Qiu, Xiangnan He, Xin Xin, Liang Chen, Guli
+Lin, and Keping Yang. 2021. AutoDebias: Learning to debias for recommendation.
+In SIGIR. 21–30.
+[5] Yongjun Chen, Zhiwei Liu, Jia Li, Julian McAuley, and Caiming Xiong. 2022. Intent
+contrastive learning for sequential recommendation. In WWW. 2172–2182.
+[6] Yizhou Dang, Yuting Liu, Enneng Yang, Guibing Guo, Linying Jiang, Xingwei
+Wang, and Jianzhe Zhao. 2024. Repeated Padding for Sequential Recommendation.
+In RecSys. 497–506.
+[7] Yizhou Dang, Yuting Liu, Enneng Yang, Minhan Huang, Guibing Guo, Jianzhe
+Zhao, and Xingwei Wang. 2025. Data augmentation as free lunch: Exploring the
+test-time augmentation for sequential recommendation. In SIGIR. 1466–1475.
+[8] Yizhou Dang, Zhifu Wei, Minhan Huang, Lianbo Ma, Jianzhe Zhao, Guibing
+Guo, and Xingwei Wang. 2026. Tail-Aware Data Augmentation for Long-Tail
+Sequential Recommendation. arXiv preprint arXiv:2601.10933 (2026).
+[9] Yizhou Dang, Enneng Yang, Guibing Guo, Linying Jiang, Xingwei Wang, Xiaoxiao
+Xu, Qinghui Sun, and Hong Liu. 2023. TiCoSeRec: Augmenting data to uniform
+sequences by time intervals for effective recommendation. TKDE (2023).
+[10] Yizhou Dang, Enneng Yang, Guibing Guo, Linying Jiang, Xingwei Wang, Xiaoxiao
+Xu, Qinghui Sun, and Hong Liu. 2023. Uniform sequence better: Time interval
+aware data augmentation for sequential recommendation. In AAAI.
+[11] Yizhou Dang, Enneng Yang, Yuting Liu, Guibing Guo, Linying Jiang, Jianzhe Zhao,
+and Xingwei Wang. 2024. Data Augmentation for Sequential Recommendation:
+A Survey. arXiv preprint arXiv:2409.13545 (2024).
+[12] Yizhou Dang, Enneng Yang, Yuting Liu, Jianzhe Zhao, Xingwei Wang, and Guib-
+ing Guo. 2026. Exploring and Tailoring the Test-Time Augmentation for Sequen-
+tial Recommendation. TPAMI (2026).
+[13] Yizhou Dang, Jiahui Zhang, Yuting Liu, Enneng Yang, Yuliang Liang, Guibing Guo,
+Jianzhe Zhao, and Xingwei Wang. 2024. Augmenting Sequential Recommendation
+with Balanced Relevance and Diversity. arXiv preprint arXiv:2412.08300 (2024).
+[14] Yizhou Dang, Jiahui Zhang, Yuting Liu, Enneng Yang, Yuliang Liang, Guibing Guo,
+Jianzhe Zhao, and Xingwei Wang. 2025. Augmenting Sequential Recommendation
+with Balanced Relevance and Diversity. In AAAI, Vol. 39. 11563–11571.
+[15] Yicheng Di, Hongjian Shi, Xiaoming Wang, Ruhui Ma, and Yuan Liu. 2025. Feder-
+ated recommender system based on diffusion augmentation and guided denoising.
+TOIS 43, 2 (2025), 1–36.
+[16] Yicheng Di, Xiaoming Wang, Hongjian Shi, Chongsheng Fan, Rong Zhou, Ruhui
+Ma, and Yuan Liu. 2025. Personalized consumer federated recommender system
+using fine-grained transformation and hybrid information sharing. TCE (2025).
+[17] Ziwei Fan, Zhiwei Liu, Yu Wang, Alice Wang, Zahra Nazari, Lei Zheng, Hao Peng,
+and Philip S Yu. 2022. Sequential recommendation via stochastic self-attention.
+In WWW. 2036–2047.
+[18] Maurizio Ferrari Dacrema, Paolo Cremonesi, and Dietmar Jannach. 2019. Are we
+really making much progress? A worrying analysis of recent neural recommen-
+dation approaches. In SIGIR. 101–109.
+2865
+SIGIR’26，2026年7月20日至24日，墨尔本，澳大利亚维多利亚州
+党一舟等
+由于Transformer [64]的成功。SASRec [26] 使用多头自注意
+力来学习不同交互的重要性。STOSA[17] 将每个项目嵌入为
+随机高斯分布，并设计了一种Wasserstein自注意力来表征项
+目之间的关系。除了Transformer，FMLP‑Rec [94] 提出了一
+种具有可学习滤波器的全MLP模型用于SR。BSARec [58] 结合
+了自注意力和傅里叶变换来解决过度平滑问题。LRURec [81]
+引入了线性递归和矩阵对角化来捕捉转换模式。
+数据增强。由于序列推荐（SR）中存在广泛的数据稀疏性，许多
+数据增强（DA）方法已被提出，并取得了显著进展[7, 8, 12, 91]。
+启发式方法通过随机扰动序列来生成新样本。早期工作包括SSS
+[63] 和Dropout [62], ，它们将序列拆分为多个子序列或从原始数
+据中丢弃某些项。随着对比学习在序列推荐中的广泛应用，已经
+提出了几种数据增强算子。例如Crop、Mask、Reorder、I
+nsert和Substitute [38, 47, 60, 71]。遵循这一思路，许多工作通
+过考虑时间间隔[9],用户意图 [5], 以及相关性与多样性 [14]来改
+进算子。此外，ICSRec [52] 从所有用户的交互（子）序列中提
+取了粗粒度的意图信号，然后利用这些信号构建了辅助学习目标
+用于序列推荐。由于启发式方法的可控性有限，可能导致低质量
+的增强数据，许多工作探索了生成模块来生成新的序列数据[79]。
+DiffASR[42] 采用了扩散模型进行序列生成，并使用了两种引导策
+略。ASReP [48] 和BARec [25] 则采用逆向Transformer来为短
+序列生成伪先验项。
+尽管以往研究已通过实验证明SSS显著优于其他数据增强
+方法，或分析了SSS有效的原因，但仅考虑目标策略和滑动窗
+口[33, 95], ，SSS对严格模型评估及其有效条件的干扰从未被
+揭示或探索。我们通过综合实验表明，SSS干扰了研究人员对
+SR模型实际性能的评估。此外，我们分析了SSS有效的条件
+及其有效的原因。基于分析结果，我们就严格评估SR模型以
+及开发更简洁高效的增强方法进行了讨论和见解。
+8结论
+在这项工作中，我们通过广泛的实验和分析揭示了SSS对模型
+实际性能评估的干扰。此外，我们从拆分方法、目标策略和损
+失函数的角度探索了SSS有效的条件。我们发现，只有当特定
+设置同时使用时，SSS才能达到最大效能。此外，我们从训练
+数据分布的角度分析了为什么SSS是有效的。它使训练数据的
+分布更加均衡，同时增加了不同项目被目标化的可能性。最后，
+我们提供了解决SSS干扰的实用建议，讨论了新数据增强方法
+的发展，这项工作对SR之外的影响，以及这项工作的局限性。
+除第6节中提到的未来方向外，我们还计划将更多类型的推荐方
+法纳入我们的分析。
+在过去十年中，整个社区在代码和数据共享方面取得了进展，
+并确保了结果的可复现性 [18, 28, 56]。作为学术社区，我们仍
+需在研究实践中追求更高的严谨性。
+致谢
+本研究部分由国家自然科学基金资助（项目编号：
+62576083,62432003,U25A20431）。本研究还由新加坡
+教育部通过其学术研究基金（AcRF）第一级拨款支持，并通
+过SMU‑SUTD内部研究拨款（SMU‑SUTD 2023_02_01）资助，
+部分由新加坡教育部通过其学术研究基金第二级（奖项编号：
+MOE‑T2EP201230015）资助。作者非常感谢匿名审稿人为
+本研究提供的宝贵意见。
+参考文献
+[1] VitoWalterAnelli、DanieleMalitesta、ClaudioPomo、AlejandroBellogín、
+EugenioDiSciascio和TommasoDiNoia。2023年，《挑战图协同过滤的神话：基于
+合理性和可复现性的分析》。发表于RecSys，第350‑361页。[2] IlwoongBaek、
+MincheolYoon、SeongminPark和JongwukLee。2025年，《MUFFIN：用于序列推
+荐的用户自适应频率过滤混合模型》。发表于CIKM，第119‑128页。[3] Shuqing
+Bian、XingyuPan、WayneXinZhao、JinpengWang、ChuyuanWang和Ji‑Rong
+Wen。2023年，《用于序列推荐的多模态专家混合表示学习》。发表于CIKM，第
+110‑119页。[4] JiaweiChen、HandeDong、YangQiu、XiangnanHe、XinXin、
+LiangChen、GuliLin和KepingYang。2021年，《AutoDebias：学习为推荐去偏》。
+发表于SIGIR，第21‑30页。[5] YongjunChen、ZhiweiLiu、JiaLi、JulianMcAuley
+和CaimingXiong。2022年，《用于序列推荐的意图对比学习》。发表于WWW，第
+2172‑2182页。[6] YizhouDang、YutingLiu、EnnengYang、GuibingGuo、
+LinyingJiang、XingweiWang和JianzheZhao。2024年，《用于序列推荐的重复填充》。
+发表于RecSys，第497‑506页。[7] YizhouDang、YutingLiu、EnnengYang、
+MinhanHuang、GuibingGuo、JianzheZhao、XingweiWang。2025年，《数据增
+强作为免费午餐：探索序列推荐的测试时增强》。发表于SIGIR，第1466‑1475页。[8]
+YizhouDang、ZhifuWei、MinhanHuang、LianboMa、JianzheZhao、Guibing
+Guo和XingweiWang。2026年，《针对长尾序列推荐的感知数据增强》。arXiv预印本
+arXiv:2601.10933（2026）。[9] YizhouDang、EnnengYang、GuibingGuo、
+LinyingJiang、XingweiWang、XiaoxiaoXu、QinghuiSun和HongLiu。2023年，
+《TiCoSeRec：通过时间间隔增强数据以生成均匀序列的有效推荐》。TKDE（2023）。
+[10] YizhouDang、EnnengYang、GuibingGuo、LinyingJiang、XingweiWang、
+XiaoxiaoXu、QinghuiSun和HongLiu。2023年，《均匀序列更好：用于序列推荐的
+时间间隔感知数据增强》。发表于AAAI。[11] YizhouDang、EnnengYang、Yuting
+Liu、GuibingGuo、LinyingJiang、JianzheZhao和XingweiWang。2024年，《用于
+序列推荐的数据增强：一项调查》。arXiv预印本arXiv:2409.13545（2024）。[12]
+YizhouDang、EnnengYang、YutingLiu、JianzheZhao、XingweiWang和
+GuibingGuo。2026年，《探索和定制序列推荐的测试时增强》。TPAMI（2026）。
+[13] YizhouDang、JiahuiZhang、YutingLiu、EnnengYang、YuliangLiang、
+GuibingGuo、JianzheZhao和XingweiWang。2024年，《通过平衡相关性和多样性
+增强序列推荐》。arXiv预印本arXiv:2412.08300（2024）。[14] YizhouDang、
+JiahuiZhang、YutingLiu、EnnengYang、YuliangLiang、GuibingGuo、Jianzhe
+Zhao和XingweiWang。2025年，《通过平衡相关性和多样性增强序列推荐》。发表于
+AAAI，第39卷，第11563‑11571页。[15] YichengDi、HongjianShi、Xiaoming
+Wang、RuhuiMa和YuanLiu。2025年，《基于扩散增强和引导去噪的联邦推荐系统》。
+TOIS43,2（2025），第1‑36页。[16] YichengDi、XiaomingWang、HongjianShi、
+ChongshengFan、RongZhou、RuhuiMa和YuanLiu。2025年，《使用细粒度转换
+和混合信息共享的个性化消费者联邦推荐系统》。TCE（2025）。[17] ZiweiFan、
+ZhiweiLiu、YuWang、AliceWang、ZahraNazari、LeiZheng、HaoPeng和
+PhilipSYu。2022年，《基于随机自注意力的序列推荐》。发表于WWW，第
+2036‑2047页。[18] MaurizioFerrariDacrema、PaoloCremonesi和Dietmar
+Jannach。2019年，《我们真的取得了很大进展吗？对最近神经推荐方法的令人担忧的
+分析》。发表于SIGIR，第101‑109页。
+2865
+
+Pay Attention to Sequence Split: Uncovering the Impacts of Sub-Sequence Splitting
+on Sequential Recommendation Models
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+[19] Haoyan Fu, Zhida Qin, Shixiao Yang, Haoyao Zhang, Bin Lu, Shuang Li, Tianyu
+Huang, and John CS Lui. 2025. Time Matters: Enhancing Sequential Recommen-
+dations with Time-Guided Graph Neural ODEs. In KDD. 637–648.
+[20] Peng He, Yanglei Gan, Tingting Dai, Run Lin, Xuexin Li, Yao Liu, and Qiao
+Liu. 2025. Exploiting Inter-Session Information with Frequency-enhanced Dual-
+Path Networks for Sequential Recommendation. arXiv preprint arXiv:2511.06285
+(2025).
+[21] Ruining He and Julian McAuley. 2016. Fusing similarity models with markov
+chains for sparse sequential recommendation. In ICDM. IEEE, 191–200.
+[22] Byungmoon Heo and Jaekwang Kim. 2025. WaveRec: Is Wavelet Transform a
+Better Alternative to Fourier Transform for Sequential Recommendation?. In
+SIGIR. 497–502.
+[23] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk.
+2015. Session-based recommendations with recurrent neural networks. arXiv
+preprint arXiv:1511.06939 (2015).
+[24] Wei Ji, Xiangyan Liu, An Zhang, Yinwei Wei, Yongxin Ni, and Xiang Wang. 2023.
+Online distillation-enhanced multi-modal transformer for sequential recommen-
+dation. In MM. 955–965.
+[25] Juyong Jiang, Peiyan Zhang, Yingtao Luo, Chaozhuo Li, Jae Boum Kim, Kai Zhang,
+Senzhang Wang, Sunghun Kim, and Philip S Yu. 2025. Improving Sequential
+Recommendations via Bidirectional Temporal Data Augmentation With Pre-
+Training. TKDE (2025).
+[26] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-
+mendation. In ICDM. IEEE, 197–206.
+[27] Diederik P Kingma and Jimmy Ba. 2014. Adam: A method for stochastic opti-
+mization. arXiv preprint arXiv:1412.6980 (2014).
+[28] Joseph A Konstan and Gediminas Adomavicius. 2013. Toward identification
+and adoption of best practices in algorithmic recommender systems research.
+In Proceedings of the international workshop on Reproducibility and replication in
+recommender systems evaluation. 23–28.
+[29] Walid Krichene and Steffen Rendle. 2020. On sampled metrics for item recom-
+mendation. In KDD. 1748–1757.
+[30] Pengxiang Lan, Haoyu Xu, Enneng Yang, Yuliang Liang, Guibing Guo, Jianzhe
+Zhao, and Xingwei Wang. 2025. Efficient and effective prompt tuning via prompt
+decomposition and compressed outer product. In COLONG. 4406–4421.
+[31] Pengxiang Lan, Enneng Yang, Yuting Liu, Guibing Guo, Jianzhe Zhao, and Xing-
+wei Wang. 2025. EPT: efficient prompt tuning by multi-space projection and
+prompt fusion. In AAAI, Vol. 39. 24366–24374.
+[32] Pengxiang Lan, Yihao Zhang, Haoran Xiang, Yuhao Wang, and Wei Zhou. 2023.
+Spatio-temporal position-extended and gated-deep network for next poi recom-
+mendation. In DASFAA. Springer, 505–520.
+[33] Geon Lee, Bhuvesh Kumar, Clark Mingxuan Ju, Tong Zhao, Kijung Shin, Neil
+Shah, and Liam Collins. 2025. Sequential Data Augmentation for Generative
+Recommendation. arXiv preprint arXiv:2509.13648 (2025).
+[34] Ming Li, Ali Vardasbi, Andrew Yates, and Maarten De Rijke. 2023. Repetition and
+exploration in sequential recommendation. In SIGIR. 2532–2541.
+[35] Muyang Li, Zijian Zhang, Xiangyu Zhao, Wanyu Wang, Minghao Zhao, Runze
+Wu, and Ruocheng Guo. 2023. Automlp: Automated mlp for sequential recom-
+mendations. In WWW. 1190–1198.
+[36] Yaoyiran Li, Xiang Zhai, Moustafa Alzantot, Keyi Yu, Ivan Vulić, Anna Korhonen,
+and Mohamed Hammad. 2024. Calrec: Contrastive alignment of generative llms
+for sequential recommendation. In RecSys. 422–432.
+[37] Zihao Li, Aixin Sun, and Chenliang Li. 2023. Diffurec: A diffusion model for
+sequential recommendation. TOIS 42, 3 (2023), 1–28.
+[38] Yuliang Liang, Yuting Liu, Yizhou Dang, Enneng Yang, Guibing Guo, Wei Cai,
+Jianzhe Zhao, and Xingwei Wang. 2025. Self-supervised Hierarchical Represen-
+tation for Medication Recommendation. In DASFAA. Springer, 134–150.
+[39] Guanyu Lin, Chen Gao, Yu Zheng, Jianxin Chang, Yanan Niu, Yang Song, Kun
+Gai, Zhiheng Li, Depeng Jin, Yong Li, et al. 2024. Mixed attention network for
+cross-domain sequential recommendation. In WSDM. 405–413.
+[40] Haibo Liu, Zhixiang Deng, Liang Wang, Jinjia Peng, and Shi Feng. 2023.
+Distribution-based learnable filters with side information for sequential rec-
+ommendation. In RecSys. 78–88.
+[41] Qidong Liu, Xian Wu, Yejing Wang, Zijian Zhang, Feng Tian, Yefeng Zheng,
+and Xiangyu Zhao. 2024. Llm-esr: Large language models enhancement for
+long-tailed sequential recommendation. NIPS 37 (2024), 26701–26727.
+[42] Qidong Liu, Fan Yan, Xiangyu Zhao, Zhaocheng Du, Huifeng Guo, Ruiming Tang,
+and Feng Tian. 2023. Diffusion augmentation for sequential recommendation. In
+CIKM. 1576–1586.
+[43] Qidong Liu, Xiangyu Zhao, Yuhao Wang, Yejing Wang, Zijian Zhang, Yuqi Sun,
+Xiang Li, Maolin Wang, Pengyue Jia, Chong Chen, et al. 2025. Large Language
+Model Enhanced Recommender Systems: Methods, Applications and Trends. In
+KDD. 6096–6106.
+[44] Qijiong Liu, Jieming Zhu, Yanting Yang, Quanyu Dai, Zhaocheng Du, Xiao-Ming
+Wu, Zhou Zhao, Rui Zhang, and Zhenhua Dong. 2024. Multimodal pretraining,
+adaptation, and generation for recommendation: A survey. In KDD. 6566–6576.
+[45] Xiaoyu Liu, Jiaxin Yuan, Yuhang Zhou, Jingling Li, Furong Huang, and Wei Ai.
+2025. CSRec: Rethinking Sequential Recommendation from A Causal Perspective..
+In SIGIR. 1562–1571.
+[46] Yuli Liu, Christian Walder, Lexing Xie, and Yiqun Liu. 2024. Probabilistic attention
+for sequential recommendation. In KDD. 1956–1967.
+[47] Zhiwei Liu, Yongjun Chen, Jia Li, Philip S Yu, Julian McAuley, and Caiming
+Xiong. 2021. Contrastive self-supervised sequential recommendation with robust
+augmentation. arXiv preprint arXiv:2108.06479 (2021).
+[48] Zhiwei Liu, Ziwei Fan, Yu Wang, and Philip S Yu. 2021. Augmenting sequential
+recommendation with pseudo-prior items via reversely pre-training transformer.
+In SIGIR. 1608–1612.
+[49] Julian McAuley, Rahul Pandey, and Jure Leskovec. 2015. Inferring networks of
+substitutable and complementary products. In KDD. 785–794.
+[50] Krishna P Neupane, Ervine Zheng, and Qi Yu. 2024. Evidential stochastic dif-
+ferential equations for time-aware sequential recommendation. NIPS 37 (2024),
+67556–67574.
+[51] Xingyu Pan, Yushuo Chen, Changxin Tian, Zihan Lin, Jinpeng Wang, He Hu,
+and Wayne Xin Zhao. 2022. Multimodal meta-learning for cold-start sequential
+recommendation. In CIKM. 3421–3430.
+[52] Xiuyuan Qin, Huanhuan Yuan, Pengpeng Zhao, Guanfeng Liu, Fuzhen Zhuang,
+and Victor S Sheng. 2024. Intent contrastive learning with cross subsequences
+for sequential recommendation. In WSDM. 548–556.
+[53] Ruihong Qiu, Zi Huang, Hongzhi Yin, and Zijian Wang. 2022. Contrastive
+learning for representation degeneration problem in sequential recommendation.
+In WSDM. 813–823.
+[54] Shilin Qu, Fajie Yuan, Guibing Guo, Liguang Zhang, and Wei Wei. 2022. CmnRec:
+Sequential Recommendations with Chunk-accelerated Memory Network. TKDE
+(2022).
+[55] Steffen Rendle, Christoph Freudenthaler, and Lars Schmidt-Thieme. 2010. Factor-
+izing personalized markov chains for next-basket recommendation. In WWW.
+811–820.
+[56] Faisal Shehzad, Maurizio Ferrari Dacrema, and Dietmar Jannach. 2025. A Worry-
+ing Reproducibility Study of Intent-Aware Recommendation Models. In SIGIR.
+3155–3164.
+[57] Yehjin Shin, Jeongwhan Choi, Seojin Kim, and Noseong Park. 2025. TV-Rec:
+Time-Variant Convolutional Filter for Sequential Recommendation. arXiv preprint
+arXiv:2510.25259 (2025).
+[58] Yehjin Shin, Jeongwhan Choi, Hyowon Wi, and Noseong Park. 2024. An attentive
+inductive bias for sequential recommendation beyond the self-attention. In AAAI,
+Vol. 38. 8984–8992.
+[59] Yatong Sun, Bin Wang, Zhu Sun, and Xiaochun Yang. 2021. Does Every Data In-
+stance Matter? Enhancing Sequential Recommendation by Eliminating Unreliable
+Data.. In IJCAI. 1579–1585.
+[60] Yatong Sun, Bin Wang, Zhu Sun, Xiaochun Yang, and Yan Wang. 2023. Theoreti-
+cally guaranteed bidirectional data rectification for robust sequential recommen-
+dation. NIPS 36 (2023), 2850–2876.
+[61] Yatong Sun, Xiaochun Yang, Zhu Sun, Yan Wang, Bin Wang, and Xinghua Qu.
+2025. LLM4RSR: Large Language Models as Data Correctors for Robust Sequential
+Recommendation. In AAAI, Vol. 39. 12604–12612.
+[62] Yong Kiam Tan, Xinxing Xu, and Yong Liu. 2016. Improved recurrent neural
+networks for session-based recommendations. In DLRS. 17–22.
+[63] Jiaxi Tang and Ke Wang. 2018. Personalized top-n sequential recommendation
+via convolutional sequence embedding. In WSDM. 565–573.
+[64] A Vaswani. 2017. Attention is all you need. NIPS (2017).
+[65] Hua Wang, Jinghao Lu, and Fan Zhang. 2026. EEO-TFV: Escape-Explore Optimizer
+for Web-Scale Time-Series Forecasting and Vision Analysis. arXiv preprint
+arXiv:2602.02551 (2026).
+[66] Wenjie Wang, Xinyu Lin, Fuli Feng, Xiangnan He, Min Lin, and Tat-Seng Chua.
+2022. Causal representation learning for out-of-distribution recommendation. In
+WWW. 3562–3571.
+[67] Zhenlei Wang, Jingsen Zhang, Hongteng Xu, Xu Chen, Yongfeng Zhang,
+Wayne Xin Zhao, and Ji-Rong Wen. 2021. Counterfactual data-augmented se-
+quential recommendation. In SIGIR. 347–356.
+[68] Zihao Wu, Xin Wang, Hong Chen, Kaidong Li, Yi Han, Lifeng Sun, and Wenwu
+Zhu. 2023. Diff4rec: Sequential recommendation with curriculum-scheduled
+diffusion augmentation. In MM. 9329–9335.
+[69] Jiafeng Xia, Dongsheng Li, Hansu Gu, Tun Lu, Peng Zhang, Li Shang, and Ning
+Gu. 2025. Oracle-guided Dynamic User Preference Modeling for Sequential
+Recommendation. In WSDM. 363–372.
+[70] Lianghao Xia, Chao Huang, Yong Xu, and Jian Pei. 2022. Multi-behavior sequential
+recommendation with temporal graph transformer. TKDE 35, 6 (2022), 6099–6112.
+[71] Xu Xie, Fei Sun, Zhaoyang Liu, Shiwen Wu, Jinyang Gao, Jiandong Zhang, Bolin
+Ding, and Bin Cui. 2022. Contrastive learning for sequential recommendation. In
+ICDE. IEEE, 1259–1273.
+[72] Huayang Xu, Huanhuan Yuan, Guanfeng Liu, Junhua Fang, Lei Zhao, and Peng-
+peng Zhao. 2025. Wavelet Enhanced Adaptive Frequency Filter for Sequential
+Recommendation. arXiv preprint arXiv:2511.07028 (2025).
+[73] Mingshi Xu, Haoren Zhu, and Wilfred Siu Hung Ng. 2025. Multi-Item-Query
+Attention for Stable Sequential Recommendation. In CIKM. 5381–5385.
+2866
+注意序列分割：揭示子序列分割对序列推荐模型的影响
+SIGIR’26，2026年7月20日至24日，墨尔本，维多利亚州，澳大利亚
+[19] HaoyanFu、ZhidaQin、ShixiaoYang、HaoyaoZhang、BinLu、ShuangLi、
+TianyuHuang和JohnCSLui。2025年，《时间很重要：使用时间引导图神经ODE增
+强序列推荐》。发表于KDD，第637‑648页。[20] PengHe、YangleiGan、Tingting
+Dai、RunLin、XuexinLi、YaoLiu和QiaoLiu。2025年，《利用会话间信息与频率增
+强双路径网络进行序列推荐》。arXiv预印本arXiv:2511.06285（2025）。[21]
+RuiningHe和JulianMcAuley。2016年，《融合相似度模型与马尔可夫链进行稀疏序列
+推荐》。发表于ICDM，IEEE，第191‑200页。[22] ByungmoonHeo和JaekwangKi
+m。2025年，《WaveRec：小波变换是否是序列推荐中傅里叶变换的更好替代方案？》。
+发表于SIGIR，第497‑502页。[23] BalázsHidasi、AlexandrosKaratzoglou、Linas
+Baltrunas和DomonkosTikk。2015年，《基于会话的推荐与循环神经网络》。arXiv预
+印本arXiv:1511.06939（2015）。[24] WeiJi、XiangyanLiu、AnZhang、Yinwei
+Wei、YongxinNi和XiangWang。2023年，《用于序列推荐的在线蒸馏增强多模态
+Transformer》。发表于MM，第955‑965页。[25] JuyongJiang、PeiyanZhang、
+YingtaoLuo、ChaozhuoLi、JaeBoumKim、KaiZhang、SenzhangWang、
+SunghunKim和PhilipSYu。2025年，《通过双向时间数据增强和预训练改进序列推
+荐》。TKDE（2025）。[26] Wang‑ChengKang和JulianMcAuley。2018年，《自注
+意力的序列推荐》。发表于ICDM，IEEE，第197‑206页。[27] DiederikPKingma和
+JimmyBa。2014年，《Adam：一种随机优化方法》。arXiv预印本arXiv:1412.6980
+（2014）。[28] JosephAKonstan和GediminasAdomavicius。2013年，《迈向算法
+推荐系统研究的最佳实践识别和采纳》。发表于国际研讨会“推荐系统评估中的可复现性
+和复制”，第23‑28页。[29] WalidKrichene和SteffenRendle。2020年，《关于推荐项
+目采样指标的探讨》。发表于KDD，第1748‑1757页。[30] PengxiangLan、Haoyu
+Xu、EnnengYang、YuliangLiang、GuibingGuo、JianzheZhao和XingweiWang。
+2025年，《通过提示分解和压缩外积进行高效和有效的提示微调》。发表于COLONG，
+第4406‑4421页。[31] PengxiangLan、EnnengYang、YutingLiu、GuibingGuo、
+JianzheZhao和XingweiWang。2025年，《EPT：通过多空间投影和提示融合进行高
+效提示微调》。发表于AAAI，第39卷，第24366‑24374页。[32] PengxiangLan、
+YihaoZhang、HaoranXiang、YuhaoWang和WeiZhou。2023年，《时空位置扩展
+和门控深度网络用于下一个POI推荐》。发表于DASFAA。Springer，第505‑520页。
+[33] GeonLee、BhuveshKumar、ClarkMingxuanJu、TongZhao、KijungShin、
+NeilShah和LiamCollins。2025年，《用于生成式推荐的序列数据增强》。arXiv预印
+本arXiv:2509.13648（2025）。[34] MingLi、AliVardasbi、AndrewYates和
+MaartenDeRijke。2023年，《序列推荐中的重复和探索》。发表于SIGIR，第
+2532‑2541页。[35] MuyangLi、ZijianZhang、XiangyuZhao、WanyuWang、
+MinghaoZhao、RunzeWu和RuochengGuo。2023年，《Automlp：用于序列推荐的
+自动MLP》。发表于WWW，第1190‑1198页。[36] YaoyiranLi、XiangZhai、
+MoustafaAlzantot、KeyiYu、IvanVulić、AnnaKorhonen和MohamedHammad。
+2024年，《Calrec：用于序列推荐的生成式LLM对比对齐》。发表于RecSys，第
+422‑432页。[37] ZihaoLi、AixinSun和ChenliangLi。2023年，《Diffurec：一种用
+于序列推荐的扩散模型》。TOIS42,3（2023），第1‑28页。[38] YuliangLiang、
+YutingLiu、YizhouDang、EnnengYang、GuibingGuo、WeiCai、JianzheZhao和
+XingweiWang。2025年，《用于药物推荐的自监督分层表示》。发表于DASFAA。
+Springer，第134‑150页。[39] GuanyuLin、ChenGao、YuZheng、JianxinChang、
+YananNiu、YangSong、KunGai、ZhihengLi、DepengJin、YongLi等。2024年，
+《用于跨域序列推荐的混合注意力网络》。发表于WSDM，第405‑413页。[40] Haibo
+Liu、ZhixiangDeng、LiangWang、JinjiaPeng和ShiFeng。2023年，《基于分布的
+可学习滤波器与序列推荐中的辅助信息》。发表于RecSys，第78‑88页。[41] Qidong
+Liu、XianWu、YejingWang、ZijianZhang、FengTian、YefengZheng和Xiangyu
+Zhao。2024年，《Llm‑esr：用于长尾序列推荐的大型语言模型增强》。NIPS37（
+2024），第26701‑26727页。[42] QidongLiu、FanYan、XiangyuZhao、
+ZhaochengDu、HuifengGuo、RuimingTang和FengTian。2023年，《用于序列推
+荐的扩散增强》。发表于CIKM，第1576‑1586页。[43] QidongLiu、XiangyuZhao、
+YuhaoWang、YejingWang、ZijianZhang、YuqiSun、XiangLi、MaolinWang、
+PengyueJia、ChongChen等。2025年，《大型语言模型增强推荐系统：方法、应用
+和趋势》。发表于KDD，第6096‑6106页。[44] QijiongLiu、JiemingZhu、Yanting
+Yang、QuanyuDai、ZhaochengDu、Xiao‑MingWu、ZhouZhao、RuiZhang和
+ZhenhuaDong。2024年，《推荐的多模态预训练、适应和生成：一项调查》。发表于
+KDD，第6566‑6576页。[45] XiaoyuLiu、JiaxinYuan、YuhangZhou、JinglingLi、
+FurongHuang和WeiAi。2025年，《CSRec：从因果视角重新思考序列推荐》。
+在SIGIR上。1562–1571.[46] 刘宇莉，ChristianWalder，谢乐兴，和刘
+一琴。2024。概率注意力机制用于序列推荐。在KDD上。1956–1967.[47] 刘
+志伟，陈永军，李佳，PhilipSYu，JulianMcAuley，和熊才明。2021。具有
+鲁棒增强的对比自监督序列推荐。arXiv预印本arXiv:2108.06479（2021）。
+[48] 刘志伟，范子伟，王宇，和PhilipSYu。2021。通过逆向预训练
+transformer使用伪先验项增强序列推荐。在SIGIR上。1608–1612.[49]
+JulianMcAuley，RahulPandey，和JureLeskovec。2015。推断可替代和互
+补产品的网络。在KDD上。785–794。[50] KrishnaPNeupane，郑尔文，和
+余琪。2024。用于时间感知序列推荐的经验随机微分方程。NIPS37（2024），
+67556–67574.[51] 潘行宇，陈宇硕，田长信，林子涵，王金鹏，胡鹤，和赵文
+新。2022。用于冷启动序列推荐的多模态元学习。在CIKM上。3421–3430.
+[52] 秦秀远，袁欢欢，赵鹏鹏，刘冠峰，庄福珍，和VictorSSheng。2024。
+用于序列推荐的意图对比学习与交叉子序列。在WSDM上。548–556。[53] 邱
+瑞红，黄子，尹红志，和王子建。2022。用于序列推荐表示退化的对比学习。
+在WSDM上。813–823。[54] 曲世林，袁发杰，郭贵兵，张立光，和魏伟。
+2022。CmnRec：具有块加速记忆网络的序列推荐。TKDE（2022）。[55]
+SteffenRendle，ChristophFreudenthaler，和LarsSchmidt‑Thieme。
+2010。为下一篮推荐因子分解个性化马尔可夫链。在WWW上。811–820。
+[56] FaisalShehzad，MaurizioFerrariDacrema，和DietmarJannach。
+2025。意图感知推荐模型的令人担忧的可复现性研究。在SIGIR上。3155–
+3164。[57] ShinYehjin，ChoiJeongwhan，KimSeojin，和ParkNoseong。
+2025。TV‑Rec：用于序列推荐的时间变卷积滤波器。arXiv预印本
+arXiv:2510.25259（2025）。[58] ShinYehjin，ChoiJeongwhan，Wi
+Hyowon，和ParkNoseong。2024。超越自注意力的序列推荐的注意力归纳偏
+差。在AAAI，第38卷。8984–8992。[59] 孙亚通，王斌，孙珠，和杨晓春。
+2021。每个数据实例都重要吗？通过消除不可靠数据增强序列推荐。在IJCAI
+上。1579–1585。[60] 孙亚通，王斌，孙珠，杨晓春，和王岩。2023。理论上
+保证的双向数据校正用于鲁棒序列推荐。NIPS36（2023），2850–2876。
+[61] 孙亚通，杨晓春，孙珠，王岩，王斌，和QuXinghua。2025。LL
+M4RSR：作为数据校正器的大语言模型用于鲁棒序列推荐。在AAAI，第39卷。
+12604–12612。[62] TanYongKiam，XuXinxing，和LiuYong。2016。用于
+会话式推荐的改进循环神经网络。在DLRS上。17–22。[63] TangJiaxi和
+WangKe。2018。通过卷积序列嵌入进行个性化Top‑n序列推荐。在WSDM上。
+565–573。[64] AVaswani。2017。注意力是你需要的全部。NIPS（2017）。
+[65] 王华，卢景浩，和张帆。2026。EEO‑TFV：用于Web规模时间序列预测和
+视觉分析的逃脱‑探索优化器。arXiv预印本arXiv:2602.02551（2026）。[66]
+王文杰，林新宇，冯福丽，何翔南，林敏，和ChuaTat‑Seng。2022。用于分
+布外推荐的因果表示学习。在WWW上。3562–3571。[67] 王振雷，张景森，徐
+洪腾，陈旭，张永峰，赵文新，和文继荣。2021。反事实数据增强序列推荐。
+在SIGIR上。347–356。[68] 吴志浩，王欣，陈红，李凯东，韩毅，孙立峰，和
+朱文武。2023。Diff4rec：具有课程调度扩散增强的序列推荐。在MM上。
+9329–9335。[69] 夏嘉峰，李东升，顾汉苏，卢tun，张鹏，上李，和顾宁。
+2025。用于序列推荐的Oracle引导动态用户偏好建模。在WSDM上。363–
+372。[70] 夏亮浩，黄超，徐勇，和裴健。2022。具有时间图Transformer的多
+行为序列推荐。TKDE35,6（2022），6099–6112。[71] 谢旭，孙飞，刘兆
+阳，吴世文，高金阳，张建东，丁波林，和崔斌。2022。用于序列推荐的对比
+学习。在ICDE。IEEE,1259–1273。[72] 徐怀阳，袁欢欢，刘冠峰，方俊华，
+赵雷，和赵鹏鹏。2025。小波增强自适应频率滤波器用于序列推荐。arXiv预印
+本arXiv:2511.07028（2025）。[73] 徐明诗，朱浩然，和NgWilfredSiu
+Hung。2025。用于稳定序列推荐的多项查询注意力。在CIKM上。5381–
+5385。
+2866
+
+SIGIR ’26, July 20–24, 2026, Melbourne, VIC, Australia
+Yizhou Dang, et al.
+[74] Wujiang Xu, Qitian Wu, Runzhong Wang, Mingming Ha, Qiongxu Ma, Linxun
+Chen, Bing Han, and Junchi Yan. 2024. Rethinking cross-domain sequential
+recommendation under open-world assumptions. In WWW. 3173–3184.
+[75] Zhengyi Yang, Xiangnan He, Jizhi Zhang, Jiancan Wu, Xin Xin, Jiawei Chen, and
+Xiang Wang. 2023. A generic learning framework for sequential recommendation
+with distribution shifts. In SIGIR. 331–340.
+[76] Wenwen Ye, Shuaiqiang Wang, Xu Chen, Xuepeng Wang, Zheng Qin, and Dawei
+Yin. 2020. Time matters: Sequential recommendation with complex temporal
+information. In SIGIR. 1459–1468.
+[77] Yaowen Ye, Lianghao Xia, and Chao Huang. 2023. Graph masked autoencoder
+for sequential recommendation. In SIGIR. 321–330.
+[78] Hongzhi Yin, Qinyong Wang, Kai Zheng, Zhixu Li, and Xiaofang Zhou. 2020.
+Overcoming data sparsity in group recommendation. TKDE 34, 7 (2020), 3447–
+3460.
+[79] Mingjia Yin, Hao Wang, Wei Guo, Yong Liu, Suojuan Zhang, Sirui Zhao, Defu Lian,
+and Enhong Chen. 2024. Dataset regeneration for sequential recommendation.
+In KDD. 3954–3965.
+[80] Fajie Yuan, Alexandros Karatzoglou, Ioannis Arapakis, Joemon M Jose, and Xi-
+angnan He. 2019. A simple convolutional generative network for next item
+recommendation. In WSDM. 582–590.
+[81] Zhenrui Yue, Yueqi Wang, Zhankui He, Huimin Zeng, Julian McAuley, and Dong
+Wang. 2024. Linear recurrent units for sequential recommendation. In WSDM.
+930–938.
+[82] Tianzi Zang, Yanmin Zhu, Haobing Liu, Ruohan Zhang, and Jiadi Yu. 2022. A
+survey on cross-domain recommendation: taxonomies, methods, and future
+directions. TOIS 41, 2 (2022), 1–39.
+[83] Chunxu Zhang, Guodong Long, Hongkuan Guo, Xiao Fang, Yang Song, Zhao-
+jie Liu, Guorui Zhou, Zijian Zhang, Yang Liu, and Bo Yang. 2024. Federated
+adaptation for foundation model-based recommendations. In IJCAI. 5453–5461.
+[84] Jiaqi Zhang, Yu Cheng, Yongxin Ni, Yunzhu Pan, Zheng Yuan, Junchen Fu, Youhua
+Li, Jie Wang, and Fajie Yuan. 2024. Ninerec: A benchmark dataset suite for
+evaluating transferable recommendation. TPAMI (2024).
+[85] Yipeng Zhang, Xin Wang, Hong Chen, and Wenwu Zhu. 2023. Adaptive disen-
+tangled transformer for sequential recommendation. In KDD. 3434–3445.
+[86] Zijian Zhang, Shuchang Liu, Ziru Liu, Rui Zhong, Qingpeng Cai, Xiangyu Zhao,
+Chunxu Zhang, Qidong Liu, and Peng Jiang. 2025. Llm-powered user simulator
+for recommender system. In AAAI, Vol. 39. 13339–13347.
+[87] Zijian Zhang, Shuchang Liu, Jiaao Yu, Qingpeng Cai, Xiangyu Zhao, Chunxu
+Zhang, Ziru Liu, Qidong Liu, Hongwei Zhao, Lantao Hu, et al. 2024. M3oe: Multi-
+domain multi-task mixture-of experts recommendation framework. In SIGIR.
+893–902.
+[88] Chuang Zhao, Xinyu Li, Ming He, Hongke Zhao, and Jianping Fan. 2023. Sequen-
+tial Recommendation via an Adaptive Cross-domain Knowledge Decomposition.
+In CIKM. 3453–3463.
+[89] Chu Zhao, Enneng Yang, Yuliang Liang, Jianzhe Zhao, Guibing Guo, and Xingwei
+Wang. 2025. Distributionally robust graph out-of-distribution recommendation
+via diffusion model. In WWW. 2018–2031.
+[90] Chuang Zhao, Hongke Zhao, Ming He, Jian Zhang, and Jianping Fan. 2023. Cross-
+domain recommendation via user interest alignment. In WWW. 887–896.
+[91] Chuang Zhao, Hongke Zhao, Xiaofang Zhou, and Xiaomeng Li. 2024. Enhancing
+precision drug recommendations via in-depth exploration of motif relationships.
+TKDE 36, 12 (2024), 8164–8178.
+[92] Wayne Xin Zhao, Shanlei Mu, Yupeng Hou, Zihan Lin, Yushuo Chen, Xingyu Pan,
+Kaiyuan Li, Yujie Lu, Hui Wang, Changxin Tian, et al. 2021. Recbole: Towards a
+unified, comprehensive and efficient framework for recommendation algorithms.
+In CIKM. 4653–4664.
+[93] Zihuai Zhao, Wenqi Fan, Jiatong Li, Yunqing Liu, Xiaowei Mei, Yiqi Wang, Zhen
+Wen, Fei Wang, Xiangyu Zhao, Jiliang Tang, et al. 2024. Recommender systems
+in the era of large language models (llms). TKDE 36, 11 (2024), 6889–6907.
+[94] Kun Zhou, Hui Yu, Wayne Xin Zhao, and Ji-Rong Wen. 2022. Filter-enhanced
+MLP is all you need for sequential recommendation. In WWW. 2388–2399.
+[95] Peilin Zhou, You-Liang Huang, Yueqi Xie, Jingqi Gao, Shoujin Wang, Jae Boum
+Kim, and Sunghun Kim. 2024. Is contrastive learning necessary? a study of data
+augmentation vs contrastive learning in sequential recommendation. In WWW.
+3854–3863.
+2867
+SIGIR’26，2026年7月20日至24日，墨尔本，澳大利亚维多利亚州
+党一舟等
+[74] 徐无江，吴启天，王润中，何明明，马琼旭，陈林训，韩冰，和闫军奇。
+2024。在开放世界假设下重新思考跨域序列推荐。在WWW上。3173–3184。
+[75] 杨正谊，何翔南，张继志，吴建灿，徐欣，陈佳伟，和王翔。2023。用于
+具有分布转移的序列推荐的通用学习框架。在SIGIR上。331–340。[76] 叶文文，
+王帅强，陈旭，王学鹏，秦铮，和尹德华。2020。时间很重要：具有复杂时间
+信息的序列推荐。在SIGIR上。1459–1468。[77] 叶亚文，夏亮浩，和黄超。
+2023。用于序列推荐的图掩码自动编码器。在SIGIR上。321–330。[78] 尹红
+志，王庆勇，郑凯，李志旭，和周晓方。2020。克服群体推荐中的数据稀疏性。
+TKDE34,7（2020），3447–3460。[79] 尹明嘉，王浩，郭伟，刘永，张索
+娟，赵思睿，连德华，和陈Enhong。2024。用于序列推荐的数据集再生。在
+KDD上。3954–3965。[80] 袁发杰，KaratzoglouAlexandros，Arapakis
+Ioannis，JoemonMJose，和何翔南。2019。用于下一项推荐的简单卷积生
+成网络。在WSDM上。582–590。[81] 岳振瑞，王越奇，何振奎，曾慧敏，
+JulianMcAuley，和王东。2024。用于序列推荐的线性递归单元。在WSDM上。
+930–938。[82] 臧天姿，朱艳敏，刘好兵，张若涵，和余佳迪。2022。跨域推
+荐综述：分类、方法、和未来方向。TOIS41,2（2022），1–39。[83] 张春旭，
+龙国栋，郭宏宽，方晓，宋阳，刘赵杰，周国瑞，张子建，刘阳，和杨波。
+2024。基于基础模型的推荐的联邦适应。在IJCAI上。5453–5461。[84] 张嘉
+琪，程宇，倪永新，潘云珠，袁铮，付俊晨，李友华，王杰，和袁发杰。
+2024。Ninerec：用于评估可迁移推荐的基准数据集套件。TPAMI（2024）。
+[85] 张一鹏，王欣，陈红，朱文武。2023年。自适应解耦Transformer用于序
+列推荐。在KDD。3434–3445.[86] 张子健，刘树昌，刘子如，钟瑞，蔡清鹏，
+赵祥宇，张春旭，刘启东，江鹏。2025年。基于大型语言模型的用户模拟器用
+于推荐系统。在AAAI，第39卷。13339–13347.[87] 张子健，刘树昌，余嘉澳，
+蔡清鹏，赵祥宇，张春旭，刘子如，刘启东，赵洪伟，胡兰涛，等。2024年。
+M3oe：多领域多任务专家混合推荐框架。在SIGIR。893–902.[88] 赵崇，李新
+宇，何明，赵洪科，范建平。2023年。自适应跨域知识分解的序列推荐。在
+CIKM。3453–3463.[89] 赵楚，杨恩能，梁玉良，赵建哲，郭贵兵，王行伟。
+2025年。基于扩散模型的分布鲁棒图分布外推荐。在WWW。2018–2031.[90]
+赵崇，赵洪科，何明，张健，范建平。2023年。基于用户兴趣对齐的跨域推荐。
+在WWW。887–896.[91] 赵崇，赵洪科，周晓方，李晓萌。2024年。通过深入
+探索基序关系来增强精准药物推荐。TKDE36,12(2024),8164–8178.[92] 赵
+文新，穆山蕾，侯宇鹏，林子涵，陈宇索，潘行宇，李凯元，陆宇洁，王辉，
+田长鑫，等。2021年。Recbole：迈向统一、全面和高效的推荐算法框架。在
+CIKM。4653–4664.[93] 赵自怀，范文奇，李家通，刘云清，梅晓伟，王一奇，
+温振，王飞，赵祥宇，唐继良，等。2024年。大型语言模型时代（LLM）的推
+荐系统。TKDE36,11(2024),6889–6907.[94] 周坤，余辉，赵文新，温继
+荣。2022年。滤波增强MLP是序列推荐的全部所需。在WWW。2388–2399.
+[95] 周培林，黄友良，谢月奇，高静琪，王寿进，金载厚，金成勋。2024年。
+对比学习有必要吗？序列推荐中数据增强与对比学习的研究。在WWW。3854–
+3863.
+2867

@@ -156,6 +156,136 @@
 
 2. 启动 Jupyter Notebook：`jupyter notebook`
 
+# Pip 用法
+
+## 包管理
+
+1. 安装包：`pip install package_name`
+
+2. 安装指定版本：`pip install package_name==1.2.3`
+
+3. 安装最低版本：`pip install "package_name>=1.2.3"`
+
+4. 安装多个包：`pip install package1 package2`
+
+5. 从文件安装：`pip install -r requirements.txt`
+
+6. 升级包：`pip install --upgrade package_name`
+
+7. 卸载包：`pip uninstall package_name`
+
+8. 查看已安装的包：`pip list`
+
+9. 查看过期的包：`pip list --outdated`
+
+10. 查看包详情：`pip show package_name`
+
+11. 查看包的所有版本：`pip index versions package_name`
+
+12. 导出依赖：`pip freeze > requirements.txt`
+
+---
+
+## 强制重装与忽略依赖
+
+1. 强制重装：`pip install --force-reinstall package_name==1.2.3`
+
+2. 只装本包不装依赖：`pip install --no-deps package_name`
+
+3. 忽略已装版本覆盖安装：`pip install --ignore-installed package_name`
+
+4. 不使用缓存：`pip install --no-cache-dir package_name`
+
+---
+
+## 依赖冲突检查
+
+1. 检查所有冲突：`pip check`
+
+2. 查看包的依赖：`pip show package_name`
+
+3. 查看谁依赖了它：`pip show package_name`（看 Required-by）
+
+4. 生成依赖快照：`pip freeze > env_backup.txt`
+
+5. 按快照恢复：`pip install -r env_backup.txt`
+
+---
+
+## 官方索引安装（CUDA 版）
+
+1. CUDA 12.8：`pip install torch==2.11.0+cu128 torchvision==0.26.0+cu128 torchaudio==2.11.0+cu128 --index-url https://download.pytorch.org/whl/cu128`
+
+2. xformers：`pip install -U xformers==0.0.35+cu128 --index-url https://download.pytorch.org/whl/cu128`
+
+3. 常用索引：
+
+| CUDA 版本 | 索引 URL |
+| --------- | -------- |
+| cu118 | `https://download.pytorch.org/whl/cu118` |
+| cu121 | `https://download.pytorch.org/whl/cu121` |
+| cu124 | `https://download.pytorch.org/whl/cu124` |
+| cu126 | `https://download.pytorch.org/whl/cu126` |
+| cu128 | `https://download.pytorch.org/whl/cu128` |
+| cpu | `https://download.pytorch.org/whl/cpu` |
+
+---
+
+## 镜像源配置
+
+1. 临时使用清华源：`pip install package_name -i https://pypi.tuna.tsinghua.edu.cn/simple`
+
+2. 永久配置清华源：`pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple`
+
+3. 查看当前配置：`pip config list`
+
+4. 常用镜像：
+
+| 镜像 | 地址 |
+| ---- | ---- |
+| 清华 | `https://pypi.tuna.tsinghua.edu.cn/simple` |
+| 阿里云 | `https://mirrors.aliyun.com/pypi/simple/` |
+| 中科大 | `https://pypi.mirrors.ustc.edu.cn/simple/` |
+| 豆瓣 | `https://pypi.douban.com/simple/` |
+
+---
+
+## 指定解释器安装
+
+1. 明确指定：`python -m pip install package_name`
+
+2. 查看 pip 对应的 Python：`python -m pip --version`
+
+---
+
+## 解决依赖冲突
+
+1. 先装核心包：`pip install torch==2.11.0+cu128 torchvision==0.26.0+cu128 torchaudio==2.11.0+cu128 --index-url https://download.pytorch.org/whl/cu128`
+
+2. 其他包用 `--no-deps`：`pip install huggingface-hub>=0.28.1 mobileclip==0.1.0 --no-deps`
+
+3. 用 uv 锁定版本：`uv pip install torch==2.11.0+cu128 torchvision==0.26.0+cu128 torchaudio==2.11.0+cu128 --override torch.txt`
+
+4. 建独立环境：`conda create -n tada python=3.10`
+
+---
+
+## 其他常用命令
+
+1. 查看 pip 版本：`pip --version`
+
+2. 查看帮助：`pip --help`
+
+3. 查看缓存：`pip cache list`
+
+4. 清理缓存：`pip cache purge`
+
+5. 只下载不安装：`pip download package_name -d ./pkgs`
+
+6. 从本地 whl 安装：`pip install ./pkgs/xxx.whl`
+
+7. 可编辑模式安装：`pip install -e .`
+
 # 服务器使用
 
 ## 测试连接：`Test-NetConnection 222.198.156.91 -Port 22`
@@ -220,7 +350,15 @@
 | `nvidia-smi` | 显示NVIDIA GPU状态信息 | 查看GPU使用率、显存等                                        |
 
 ---
+## 🛜 远程挂载命令
 
+1. `tmux new -s sasrec`：创建新进程（ctrl+B然后按D退出进程）
+
+2. `tmux attach -t sasrec`：连接进程
+
+3. `tmux kill-session -t sasrec`：杀死进程
+
+---
 ## 🌐 网络和下载命令
 
 | 命令     | 作用           | 示例                                    |
@@ -298,3 +436,5 @@
 5. **`-i`** 参数：`rm -i` 删除前会询问确认
 
 6. **`-h`** 参数：`ls -lh`、`df -h` 等表示以人类可读格式显示大小（KB、MB、GB）
+
+

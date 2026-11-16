@@ -1,0 +1,3674 @@
+FCRLLM: Aligning LLM with Collaborative Filtering for
+Long-tailed Sequential Recommendation
+Byungmoon Heo
+Department of Applied
+Artificial Intelligence
+Sungkyunkwan University
+Seoul, Republic of Korea
+ssiass@skku.edu
+Namjun Lee
+Convergence Program for
+Social Innovation
+Sungkyunkwan University
+Seoul, Republic of Korea
+namejun12000@g.skku.edu
+Seonah Kim
+Department of Computer
+Science and Engineering
+Sungkyunkwan University
+Suwon, Republic of Korea
+rlatjsdk2025@skku.edu
+Jaekwang Kim∗
+Convergence Program for
+Social Innovation
+Sungkyunkwan University
+Seoul, Republic of Korea
+linux@skku.edu
+Abstract
+In real-world scenarios, users tend to engage with a small set of
+popular items, while a large number of long-tail items receive lit-
+tle to no interaction. This long-tail phenomenon substantially im-
+pairs recommendation quality. Although prior approaches have
+attempted to address this issue, the absence of sufficient collabo-
+rative signals remains a major obstacle. With the advent of Large
+Language Models (LLMs), recent studies have explored leveraging
+LLM-derived semantics to enrich recommendation models. These
+approaches aim to incorporate textual or contextual knowledge
+to compensate for limited user-item interactions. A key challenge,
+however, lies in effectively integrating semantic signals with col-
+laborative representations, which originate from different modal-
+ities and learning dynamics. To tackle this, We propose a novel
+framework, called FCRLLM (the Flipped Classroom with LLM),
+for long-tail sequential recommendation that aligns collaborative
+and LLM-based semantic representations. The flipped classroom
+mechanism dynamically updates the teacher representation to align
+with the student’s attention, enabling more effective integration
+of semantic and collaborative information. This alignment is im-
+plemented via an energy-based formulation inspired by Hopfield
+networks. To validate its effectiveness, we conduct extensive exper-
+iments on three real-world datasets and demonstrate that FCRLLM
+consistently improves recommendation performance regardless of
+item popularity or user activity.
+CCS Concepts
+• Information systems →Recommender systems.
+Keywords
+Sequential Recommendation, Large Language Model, Long-tail
+Problem, Energy-based Alignment
+ACM Reference Format:
+Byungmoon Heo, Namjun Lee, Seonah Kim, and Jaekwang Kim. 2026. FCR-
+LLM: Aligning LLM with Collaborative Filtering for Long-tailed Sequential
+Recommendation. In Proceedings of the ACM Web Conference 2026 (WWW
+∗Corresponding author
+This work is licensed under a Creative Commons Attribution 4.0 International License.
+WWW ’26, Dubai, United Arab Emirates
+© 2026 Copyright held by the owner/author(s).
+ACM ISBN 979-8-4007-2307-0/2026/04
+https://doi.org/10.1145/3774904.3792565
+’26), April 13–17, 2026, Dubai, United Arab Emirates. ACM, New York, NY,
+USA, 12 pages. https://doi.org/10.1145/3774904.3792565
+1
+Introduction
+Recommender systems are essential to modern online services,
+mitigating information overload and benefiting both users and
+providers across domains such as e-commerce platforms (e.g., Ama-
+zon), video sites (e.g., TikTok, YouTube), and social networks (e.g.,
+Instagram, Facebook) [20, 30]. Collaborative filtering (CF) has long
+been a dominant approach in the field of recommender systems,
+leveraging collaborative knowledge from similar users or items
+to predict preferences [10, 17, 36, 39]. However, this reliance on
+observed interactions makes it difficult for CF methods to per-
+form well when user-item interactions are sparse. In particular,
+items and users with limited activity, commonly referred to as the
+long-tail and cold-start problems, provide insufficient signals to
+capture meaningful correlations. These sparsity issues have posed
+long-standing challenges for CF and continue to hinder the overall
+performance of recommender systems [14, 22, 51].
+The long-tail problem can be viewed from both the user and item
+perspectives. On the user side, a large portion of users have only a
+few interactions (i.e., tail users), and they significantly outnumber
+users with many interactions (i.e., head users) [18, 29]. We observe
+in Figure 1 that despite their large presence, tail users receive much
+lower recommendation performance compared to head users. This
+highlights the importance of improving recommendation quality
+for tail users, as doing so can have a meaningful impact on overall
+system performance. On the item side, the long-tailed item problem
+refers to the situation in which users mainly consume a small
+number of popular items (i.e., head items), while the majority of
+items are unpopular and rarely interacted with (i.e., tail items).
+This leads recommender models to become biased toward head
+items. Improving the recommendation of tail items plays a key role
+in enhancing user satisfaction, promoting content diversity, and
+driving long-term value for both users and service providers [28,
+51].
+Prior work has attempted to address long-tail challenges in rec-
+ommendation by focusing on either the user or item perspective.
+For the long-tail user problem, some approaches aim to augment
+users’ interaction histories by generating pseudo items or lever-
+aging information from other users to enrich tail user representa-
+tions [16, 27, 29]. Others employ adversarial training to align the
+latent spaces of head and tail users [52]. However, these methods
+largely rely on collaborative signals, which can be unreliable due
+to the sparsity of user interactions and inaccurate user similarities.
+6574
+FCRLLM：将LLM与协同过滤对齐以实现长尾序列推荐
+HeoByungmoon
+应用人工智能系高丽大
+学韩国首尔
+ssiass@skku.edu
+LeeNamjun社会创新融
+合项目高丽大学韩国首尔
+n
+a
+mejun12000@g.skku.edu
+KimSeonah
+计算机科学与工程系
+高丽大学韩国首尔
+rlatjsdk
+2025@skku.edu
+KimJaekwang∗社会
+创新融合项目高丽大学
+韩国首尔
+linux@skku.edu
+摘要
+在现实场景中，用户倾向于与一小部分热门物品互动，而大
+量长尾物品则很少甚至没有互动。这种长尾现象会显著影响
+推荐质量。尽管已有方法尝试解决这个问题，但协同信号不
+足仍然是主要障碍。随着大型语言模型（LLM）的出现，近期
+研究探索了利用LLM生成的语义来丰富推荐模型。这些方法旨
+在结合文本或上下文知识，以弥补用户‑物品互动不足的问题。
+然而，一个关键挑战在于如何有效地将语义信号与协同表示
+相结合，这些表示来自不同的模态和学习动态。为此，我们
+提出了一种名为FCRLLM（翻转课堂与LLM）的新型框架，用
+于长尾序列推荐，该框架对齐了协同表示和基于LLM的语义表
+示。翻转课堂机制动态更新教师表示以与学生的注意力保持
+一致，从而实现语义信息和协同信息的更有效整合。这种对
+齐通过受Hopfield网络启发的基于能量的公式实现。为了验证
+其有效性，我们在三个真实世界数据集上进行了广泛的实验，
+并证明FCRLLM无论物品热门程度或用户活跃度如何，都能始
+终提升推荐性能。
+CCS概念
+• 信息系统 →推荐系统
+s.
+关键词
+序列推荐，大型语言模型，长尾问题，基于能量的对齐
+ACM参考格式:
+HeoByungmoon,LeeNamjun,KimSeonah,和KimJaekwang.2026.FCR‑LLM：将LLM与协
+同过滤对齐用于长尾序列推荐.在ACM网络大会2026(WWW)会议论文集，2026年4月13日至
+17日，阿联酋迪拜.ACM,美国纽约,12页.https://doi.org/10.1145/3774904.3792565
+∗通讯作者
+本作品根据知识共享署名4.0国际许可协议授权。WWW’26,迪拜,阿拉伯联
+合酋长国©2026版权所有者/作者。ACMISBN
+979‑8‑4007‑2307‑0/2026/04https://doi.org/10.1145/3774904.3792565
+’26),2026年4月13日至17日，阿联酋迪拜.ACM,美国纽约,12页.
+https://doi.org/10.1145/3774904.3792565
+1引言
+推荐系统对现代在线服务至关重要，能够缓解信息过载，并
+使用户和提供商在电商平台（例如，亚马逊）、视频网站
+（例如，抖音、YouTube）和社交网络（例如，Instagram、
+Facebook）等各个领域受益 [20, 30]。协同过滤（CF）长期
+以来一直是推荐系统领域的主流方法，它利用相似用户或项
+目的协同知识来预测偏好 [10, 17, 36, 39]。然而，这种对观察
+交互的依赖使得CF方法在用户‑项目交互稀疏时难以表现良好。
+特别是，活动有限的项目和用户，通常被称为长尾问题和冷
+启动问题，提供的信号不足以捕捉有意义的关联。这些问题
+一直给CF带来长期挑战，并持续阻碍推荐系统的整体性能
+[14, 22, 51]。
+长尾问题可以从用户和物品两个角度来理解。在用户方
+面，很大一部分用户只有很少的交互（即长尾用户），而他
+们的人数显著多于具有大量交互的用户（即头部用户）[18, 29]。
+我们在图1中观察到，尽管长尾用户数量庞大，但他们的推荐
+性能远低于头部用户。这突显了提升长尾用户推荐质量的重
+要性，因为这样做可以对整体系统性能产生显著影响。在物
+品方面，长尾物品问题指的是用户主要消费少量热门物品
+（即头部物品），而大多数物品不受欢迎且很少被交互（即
+长尾物品）。这导致推荐模型倾向于头部物品。提升长尾物
+品的推荐在提升用户满意度、促进内容多样性和为用户和服
+务提供商创造长期价值方面发挥着关键作用[28,51]。
+先前工作尝试通过关注用户或物品视角来解决推荐中的
+长尾挑战。对于长尾用户问题，一些方法通过生成伪物品或
+利用其他用户的信息来增强用户的交互历史，以丰富长尾用
+户表示[16, 27, 29]。另一些方法则采用对抗训练来对齐头部和
+尾部用户的潜在空间[52]。然而，这些方法在很大程度上依赖
+于协同信号，由于用户交互的稀疏性和用户相似度的不准确，
+这些信号可能不可靠。
+6574
+
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+Byungmoon Heo et al.
+Figure 1: Performance of SASRec on Beauty, highlighting
+long-tail distribution challenges. The x-axis in (a) indicates
+the number of items in each user’s interaction sequence and
+the x-axis in (b) represents the number of times each item
+has been consumed.
+Meanwhile, item-side approaches enhance tail item representations
+by leveraging co-occurrence patterns with popular items or by ad-
+justing attention weights according to item popularity [14, 18, 28].
+While these strategies help surface underrepresented items, they
+often overlook user-side sparsity, resulting in limited effectiveness
+in long-tail scenarios. This highlights the need for a more holistic
+solution that can jointly address both long-tail users and items, by
+aligning collaborative and semantic signals in a unified framework.
+With the success of Transformer in natural language process-
+ing [45], recent years have witnessed a growing interest in applying
+these models to recommendation tasks. In particular, the emergence
+of Large Language Models (LLMs), known for their powerful seman-
+tic understanding and rich pre-trained knowledge, has brought new
+opportunities to the field of recommendation [21, 23, 38, 48]. Nu-
+merous studies have explored leveraging LLMs in both in-context
+learning settings and fine-tuning scenarios, demonstrating their
+strong performance, especially in cold-start and cross-domain set-
+tings [1, 5, 9, 46]. These models can incorporate external knowledge
+and semantic signals that are difficult to capture through CF alone,
+making them a promising solution to long-tail challenges. Moti-
+vated by this potential, recent research has focused on combining
+CF with LLMs to alleviate the sparsity issues associated with tail
+users and items. However, integrating these two types of mod-
+els presents a fundamental challenge, as CF and LLMs operate in
+inherently different representation spaces. This gap in modality
+introduces difficulty in aligning the representations of collaborative
+signals with those of language models. To address this alignment
+challenge, A-LLMRec [19] proposes an encoder–decoder architec-
+ture that transforms CF representations into the LLM’s semantic
+space, while LLM-ESR [26] introduces a dual-view framework that
+jointly learns from both collaborative and semantic information.
+These approaches underscore the critical importance of effective
+alignment between heterogeneous modalities in CF–LLM hybrid
+recommendation models.
+In this paper, we propose a novel alignment-aware model for
+long-tail sequential recommendation, called FCRLLM (Flipped
+Classroom with LLM for Sequential Recommendation). Our model
+integrates collaborative signals with semantic knowledge from
+LLM through a teacher–student framework, where one modality
+guides the representation learning of the other. Unlike conventional
+approaches that fix the teacher and student roles, FCRLLM intro-
+duces a bidirectional Flipped Classroom mechanism that allows
+both collaborative and semantic representations to serve as teacher
+or student depending on the context. To enable effective align-
+ment between the two modalities, we formulate an energy-based
+attention mechanism inspired by Hopfield networks [25, 34]. This
+mechanism minimizes the discrepancy between attention patterns
+of the two modalities by iteratively updating the teacher’s attention
+to better align with the student’s. We design two complementary
+alignment strategies: in the first, the semantic representation guides
+the collaborative representation; in the second, the collaborative
+representation influences the semantic representation. This bidi-
+rectional design encourages mutual adaptation and narrows the
+modality gap. By jointly optimizing these alignment strategies,
+FCRLLM effectively fuses semantic knowledge and collaborative
+patterns, improving representation quality for both head and tail
+entities.
+• We propose FCRLLM, an alignment-aware framework that inte-
+grates collaborative and semantic representations for long-tail
+sequential recommendation.
+• To bridge the modality gap, we introduce a bidirectional teacher-
+student architecture based on an energy-driven attention align-
+ment inspired by Hopfield networks.
+• Extensive experiments on three real-world datasets and multiple
+sequence models demonstrate the effectiveness and generality of
+our approach across both tail users and items.
+2
+Preliminaries
+2.1
+Problem Definition
+The goal of sequential recommendation is to predict the next item
+that a user is likely to interact with, given their historical inter-
+action sequence. Let U and I denote the sets of users and items,
+respectively, where |U| and |I| represent the number of users and
+items. For each user 𝑢∈U, let the chronological sequence of in-
+teractions be represented as S𝑢= (𝑖𝑢
+1,𝑖𝑢
+2, . . . ,𝑖𝑢
+|S𝑢|), where each
+𝑖𝑢
+𝑘∈I denotes the 𝑘-th interacted item. The task is to estimate the
+probability 𝑝(𝑖𝑢
+|S𝑢|+1 | S𝑢) for each candidate item 𝑖∈I, which
+can be used to generate a ranked list of recommendations.
+2.2
+Splitting Users and Items into Head and Tail
+Following previous studies on long-tailed sequential recommen-
+dation [14, 18, 28], we divide both users and items into head and
+tail groups based on the Pareto principle [2]. We first sort all users
+by the length of their interaction sequences and all items by their
+total number of interactions in descending order. Then, according
+to the Pareto principle (i.e., taking the top 20%), we designate the
+top users and items as head users and head items, respectively,
+denoted as Uhead and Ihead. The remaining users and items are
+categorized as tail users and tail items, denoted as Utail and Itail.
+By construction, the entire user and item sets can be decomposed
+as:
+U = Uhead ∪Utail,
+I = Ihead ∪Itail,
+(1)
+where Uhead ∩Utail = ∅and Ihead ∩Itail = ∅.
+Intuitively, head users Uhead and head items Ihead represent
+the active users and popular items that dominate most interactions,
+while tail users Utail and tail items Itail suffer from data spar-
+sity, presenting a major challenge in sequential recommendation
+systems.
+6575
+WWW’26，2026年4月13日至17日，阿联酋迪拜
+HeoByungmoon等人
+图1：SASRec在美妆领域的表现，突显长尾分布挑战。图(a)
+中的x轴表示每个用户交互序列中物品的数量，图(b)中的x轴
+表示每个物品被消费的次数。
+与此同时，物品侧方法通过利用与热门物品的共现模式或根据
+物品流行度调整注意力权重 [14, 18, 28]来增强长尾物品的表
+征。虽然这些策略有助于展现代表性不足的物品，但它们通常
+忽略了用户侧的稀疏性，导致在长尾场景中的效果有限。这突
+显了需要一种更全面的解决方案，能够在统一的框架中联合处
+理长尾用户和物品，通过对齐协同和语义信号。
+随着Transformer在自然语言处理方面的成功，近年来人
+们越来越关注将这些模型应用于推荐任务。特别是大型语言模
+型(LLM)的出现，以其强大的语义理解和丰富的预训练知识，
+为推荐领域带来了新的机遇。大量研究探索了在上下文学习和
+微调场景中利用LLM，证明它们具有强大的性能，尤其是在冷
+启动和跨领域场景中。这些模型可以整合外部知识和语义信号，
+而这些信号难以通过协同过滤(CF)单独捕获，使它们成为解决
+长尾挑战的潜在方案。受此潜力驱动，最近的研究集中于将
+CF与LLM结合，以缓解尾部用户和物品的稀疏性问题。然而，
+将这两种类型的模型集成起来存在一个基本挑战，因为CF和
+LLM在本质上处于不同的表示空间中。这种模态差距给协同信
+号与语言模型表示的对齐带来了困难。为解决这一对齐挑战，
+A‑LLMRec [19] 提出了一个编码器‑解码器架构，将CF表示转
+换为LLM的语义空间，而LLM‑ESR [26] 引入了一个双视图框
+架，联合学习协同和语义信息。这些方法强调了在CF‑LLM混
+合推荐模型中，异构模态之间有效对齐的关键重要性。
+在本文中，我们提出了一种用于长尾序列推荐的全新对齐
+感知模型，称为FCRLLM（用于序列推荐的翻转课堂式LLM）。
+我们的模型通过教师‑学生框架，将协同信号与来自LLM的语
+义知识相结合，其中一个模态指导另一个模态的表征学习。与
+固定教师和学生角色的传统方法不同，FCRLLM引入了一种双
+向翻转课堂机制，允许协同表征和语义表征都充当教师
+或学生，具体取决于上下文。为了在两种模态之间实现有效的
+对齐，我们提出了一个基于能量的注意力机制，该机制受
+Hopfield网络的启发 [25, 34]。该机制通过迭代更新教师的注
+意力来最小化两种模态的注意力模式之间的差异，以更好地与
+学生的注意力对齐。我们设计了两种互补的对齐策略：在第一
+种策略中，语义表示指导协同表示；在第二种策略中，协同表
+示影响语义表示。这种双向设计鼓励相互适应并缩小模态差距。
+通过联合优化这些对齐策略，FCRLLM有效融合了语义知识
+和协同模式，提高了头部和尾部实体的表示质量。
+• 我们提出了FCRLLM，一个融合协同过滤和语义表示的、注
+重对齐的框架，用于长尾序列推荐。
+• 为了弥合模态差距，我们引入了一种基于Hopfield网络启发
+式能量驱动的双向师生架构。
+• 在三个真实世界数据集和多种序列模型上的大量实验表明，
+我们的方法在长尾用户和物品上均有效且具有普适性。
+2预备知识
+2.1问题定义
+序列推荐的目标是预测用户在其历史交互序列中可能交互的下
+一条物品。令U和I分别表示用户集和物品集，其中|U| 和|I| 表
+示用户数和物品数。对于每个用户𝑢∈U，其时间顺序交互序
+列表示为S𝑢=(𝑖𝑢
+1,𝑖𝑢
+2,...,𝑖𝑢
+| S𝑢|)，其中每个𝑖𝑢
+𝑘∈I表示第𝑘个
+交互的物品。任务是估计每个候选物品𝑖∈I的概率𝑝(𝑖𝑢
+| S𝑢|+1 |
+S𝑢)，该概率可用于生成推荐排序列表。
+2.2将用户和物品划分为头部和尾部
+基于先前关于长尾序列推荐的研究[14, 18, 28], ，我们根据帕
+累托原则[2]将用户和物品都划分为头部和尾部组。我们首先
+按用户交互序列的长度对所有用户进行排序，并按物品交互总
+次数降序对所有物品进行排序。然后，根据帕累托原则（即取
+前20%），我们将排名靠前的用户和物品分别指定为头部用户
+和头部物品，记为Uhead和Ihead。其余用户和物品则归类为
+尾部用户和尾部物品，记为Utail和Itail。按此构造，整个用户
+和物品集合可以被分解为：
+U = Uhead ∪Utail,
+I = Ihead ∪Itail,
+(1)
+其中Uhead∩Utail= ∅，Ihead∩Itail= ∅。
+直观上，头部用户Uhead和头部物品Ihead代表着主导
+大多数交互的活跃用户和热门物品，而尾部用户Utail和尾部
+物品Itail则存在数据稀疏问题，这对序列推荐系统构成了重
+大挑战。
+6575
+
+FCRLLM: Aligning LLM with Collaborative Filtering for Long-tailed Sequential Recommendation
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+E
+N
+C
+O
+D
+E
+R
+`
+  Teacher
+  Attention
+  Student
+  Attention
+Inner
+Feedback
+..
+. . .
+Adapter
+. . .
+" name is <TITLE>;
+   brand is <BRAND>;
+   price is <PRICE>; "
+`
+  Teacher
+  Attention
+  Student
+  Attention
+ Text
+  Embedding
+ API
+Inner
+Feedback
+Semantic
+Embedding
+Layer
+Collaborative
+Embedding
+Layer
+Figure 2: The architecture of our proposed FCRLLM framework.
+3
+Methods
+The overview of the proposed method is shown in Figure 2. Our
+approach builds on a sequence encoder framework to predict users’
+next interactions based on their historical behaviors. Specifically,
+we leverage two types of representation streams: a semantic rep-
+resentation stream derived from LLM, and a collaborative rep-
+resentation stream learned directly from user-item interactions.
+This dual-stream architecture enables the model to capture both
+rich semantic information from item texts and collaborative pat-
+terns from historical interactions. In addition to the basic sequence
+modeling, our method introduces a Flipped Classroom align-
+ment framework (FlipClass) to bridge the gap between the two
+representation streams. Unlike conventional methods that statically
+fuse multi-modal signals [11, 37], we dynamically align the seman-
+tic and collaborative spaces through a bidirectional teacher-student
+mechanism. Concretely, we construct two complementary align-
+ment modules. Semantic-to-Collaborative Alignment: Treating
+the semantic representations as the teacher and the collaborative
+representations as the student to guide collaborative modeling with
+semantic knowledge. Collaborative-to-Semantic Alignment:
+Conversely, treating the collaborative representations as the teacher
+and the semantic representations as the student to enhance seman-
+tic modeling with interaction patterns. By jointly training these
+two FlipClass modules alongside the main recommendation objec-
+tive, the model learns more robust and transferable representations,
+particularly benefiting long-tail users and items.
+3.1
+Modeling User Preferences with Text and
+Collaborative Embeddings
+We model user preferences through two parallel representation
+streams: the semantic representation stream and the collabora-
+tive representation stream. The semantic representation stream
+is derived from LLM by processing item textual information, while
+the collaborative representation stream is learned directly from
+user-item interactions.
+Semantic Representation Stream. Item attributes and textual
+descriptions often convey rich semantic information that is valu-
+able for recommendation. To exploit such semantics, we first or-
+ganize the available textual information into structured prompts,
+which serve as inputs to a pretrained LLM (see Appendix A for
+the prompt templates). In our case, instead of extracting embed-
+dings from open-source LLMs such as LLaMA [44] or OPT [54],
+we obtain item representations using a public embedding API,
+text-embedding-ada-002. To avoid redundant inference costs
+during training, we precompute and cache the item embeddings.
+Let Esem ∈R|I|×𝑑llm denote the cached semantic embedding ma-
+trix, where 𝑑llm is the dimensionality of the LLM output. Instead of
+directly fine-tuning these cached embeddings, which could distort
+their original semantic structure [7, 13], we freeze Esem and intro-
+duce a 2-layer multilayer perceptron (MLP) to project each embed-
+ding ellm
+𝑖
+(i.e., the 𝑖-th row of Esem) into a recommendation-specific
+embedding space while simultaneously reducing its dimensionality:
+esem
+𝑖
+= W2
+ W1ellm
+𝑖
++ b1
+ + b2,
+(2)
+where W1, W2, b1, and b2 are trainable parameters. Given a user’s
+historical interaction sequence consisting of 𝑛𝑢interactions, we
+retrieve the adapted semantic embeddings of the interacted items
+to form a sequence Ssem = [esem
+1
+, . . . , esem
+𝑛𝑢]. This sequence is then
+processed by a shared sequence encoder 𝑓𝜃, which can be instanti-
+ated as sequence models such as self-attention-based SASRec [17]
+or recurrent-based GRU4Rec [10], to obtain the user’s semantic
+preference representation:
+usem = 𝑓𝜃(Ssem),
+(3)
+6576
+FCRLLM：将LLM与协同过滤对齐以用于长尾序列推荐
+WWW'26，2026年4月13日至17日，迪拜，阿拉伯联合酋长国
+E
+N
+C
+O
+D
+E
+R
+`
+老师
+注意力
+学生
+注意力
+..
+...
+<code>Adapter</code>
+...
+"名称是<TITLE>;
+品牌是<BRAND>;
+价格是<PRICE>; "
+`
+教师
+注意
+学生
+注意力
+Text
+嵌入
+API
+语义
+嵌入
+层
+协同
+嵌入
+层
+图2：我们提出的FCRLLM框架的架构。
+3种方法
+所提出的方法概述如图2所示。我们的方法基于序列编码框架，
+根据用户的历史行为预测其下一步交互。具体而言，我们利用
+了两种类型的表示流：一种是从LLM派生的语义表示流，以及
+一种直接从用户‑物品交互中学习到的协同表示流。这种双流
+架构使模型能够从物品文本中捕获丰富的语义信息，以及从历
+史交互中学习协同模式。除了基本的序列建模外，我们的方法
+引入了一种翻转课堂对齐框架（FlipClass），用于弥合这两种
+表示流之间的差距。与将多模态信号静态融合的传统方法不同
+[11, 37], ，我们通过双向师生机制动态对齐语义空间和协同空
+间。具体来说，我们构建了两个互补的对齐模块。语义到协同
+对齐：将语义表示视为教师，协同表示视为学生，以语义知识
+指导协同建模。协同到语义对齐：相反地，将协同表示视为教
+师，语义表示视为学生，以交互模式增强语义建模。通过在主
+推荐目标的同时联合训练这两个FlipClass模块，模型学习到更
+鲁棒和可迁移的表示，尤其有利于长尾用户和物品。
+3.1基于文本和协同嵌入建模用户偏好
+我们通过两个并行的表示流来建模用户偏好：语义表示流和协
+同表示流。语义表示流
+是从LLM中通过对项目文本信息进行处理得到的，而协同表示
+流则直接从用户‑项目交互中学习得到。
+语义表示流。物品属性和文本描述通常包含丰富的语义信息，
+对推荐非常有价值。为了利用这些语义，我们首先将可用的文
+本信息组织成结构化提示，这些提示作为预训练LLM的输入
+（见附录A中的提示模板）。在我们的案例中，我们没有从
+LLaMA [44] 或OPT [54],等开源LLM中提取嵌入，而是使用公
+共嵌入APItext‑embedding‑ada‑002获取物品表示。为了避
+免训练过程中的冗余推理成本，我们预先计算并缓存物品嵌入。
+令Esem ∈R|I|×𝑑llm 表示缓存的语义嵌入矩阵，其中𝑑llm是
+LLM输出的维度。我们没有直接微调这些缓存的嵌入（这可能
+扭曲它们的原始语义结构 [7, 13], ），而是冻结Esem，并引入
+一个2层多层感知器（MLP），将每个嵌入ellm𝑖(即Esem的𝑖‑
+th行)投影到推荐特定的嵌入空间，同时降低其维度：
+esem
+𝑖
+= W2
+ W1ellm
+𝑖
++ b1
+ + b2,
+(2)
+其中W1、W2、b1和b2是可训练参数。给定用户的交互历
+史序列，包含 𝑛𝑢个交互，我们检索交互物品的适配语义嵌
+入，形成序列Ssem= [esem1，...，esem𝑛𝑢]。该序列随后
+由共享序列编码器 𝑓𝜃处理，该编码器可以实例化为序列模型，
+如基于自注意力的SASRec [17]或基于循环的GRU4Rec
+[10], ，以获得用户的语义偏好表示：
+usem = 𝑓𝜃(Ssem),
+(3)
+6576
+
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+Byungmoon Heo et al.
+where usem ∈R𝑑denotes the final user embedding in the seman-
+tic representation stream, and 𝜃denotes the parameters of the
+sequence encoder.
+Collaborative Representation Stream. In parallel to the seman-
+tic stream, we maintain a trainable collaborative embedding ma-
+trix Ecol ∈R|I|×𝑑, which is learned directly from user-item in-
+teraction data. Given a user’s historical interaction sequence, we
+retrieve the corresponding collaborative embeddings to form a se-
+quence Scol = [ecol
+1 , . . . , ecol
+𝑛𝑢]. This sequence is then processed by
+the shared sequence encoder 𝑓𝜃to derive the user’s collaborative
+preference representation:
+ucol = 𝑓𝜃(Scol),
+(4)
+where ucol ∈R𝑑. To mitigate the training imbalance between the
+pretrained semantic embeddings and the randomly initialized col-
+laborative embeddings, we initialize Ecol by projecting the cached
+semantic embedding matrix Esem into a lower-dimensional space
+using Principal Component Analysis (PCA) [33]. This initialization
+strategy leverages semantic information to provide a more sta-
+ble and effective optimization process, especially during the early
+stages of training [7]. Moreover, we employ a shared sequence en-
+coder across both the semantic and collaborative streams, which not
+only improves parameter efficiency but also facilitates consistent
+sequential modeling across different representation spaces [26, 40].
+By jointly modeling user preferences through the semantic and
+collaborative streams, we aim to capture both the rich semantic
+information and the collaborative relational patterns, ultimately
+enhancing sequential recommendation performance.
+Scoring and Ranking Objective. To compute the final recommen-
+dation score, we concatenate the embeddings from the two streams
+and compute the inner product of the concatenated vectors:
+𝑃(𝑖𝑛𝑢+1 = 𝑖| S𝑢
+1:𝑛𝑢) = Concat(esem
+𝑖
+, ecol
+𝑖
+)⊤· Concat(usem, ucol).
+(5)
+The model is optimized using a pairwise ranking loss, which
+encourages ranking the positive item higher than the negatively
+sampled items:
+LRank = −
+∑︁
+𝑢∈U
+𝑛𝑢
+∑︁
+𝑘=1
+log𝜎
+
+𝑃(𝑖+
+𝑘+1 | S𝑢
+1:𝑘) −𝑃(𝑖−
+𝑘+1 | S𝑢
+1:𝑘)
+
+,
+(6)
+where 𝑖+
+𝑘+1 and 𝑖−
+𝑘+1 denote the ground-truth item and a negatively
+sampled item at position 𝑘+ 1 in the sequence, respectively. The
+formulation of the ranking loss may slightly differ depending on the
+backbone model. For instance, GRU4Rec adopts a sequence-to-one
+training objective, where the loss is computed only once based on
+the final hidden state of the input sequence (i.e., the Í𝑛𝑢
+𝑘=1 term is
+omitted, and the prediction is made solely for 𝑖𝑛𝑢+1 based on S𝑢
+1:𝑛𝑢).
+3.2
+FlipClass: Teacher-Student Attention
+Alignment
+Motivation. While the semantic and collaborative streams capture
+complementary signals, their attention patterns can drift apart
+during training, especially for long-tail users and items. Inspired by
+recent work on Hopfield networks and energy-based alignment [25,
+34], we interpret the attention representations from one stream
+(e.g., semantic) as stored patterns and the representations from the
+other stream (e.g., collaborative) as query patterns, or vice versa.
+This design is particularly motivated by the observation that LLM-
+based semantic representations are more effective when interaction
+data is sparse, while collaborative filtering methods perform better
+when sufficient interaction data is available [19]. By iteratively
+aligning the keys of one stream toward the queries of the other, we
+encourage both streams to share a common attention space and
+maintain consistency.
+Energy Formulation. To model the alignment between the se-
+mantic and collaborative streams, we adopt an energy formula-
+tion inspired by associative memory models. Following the energy-
+based perspective of Hopfield networks [25], we first define the
+energy for a query 𝝃∈R𝑑with respect to 𝑁stored patterns
+X = [x1, · · · , x𝑁] ∈R𝑑×𝑁:
+𝐸(𝝃; X) = 1
+2𝝃⊤𝝃−lse(X⊤𝝃, 𝛽) + 𝑐,
+with lse(v, 𝛽) := 𝛽−1 log
+ 𝑁
+∑︁
+𝑖=1
+exp(𝛽𝑣𝑖)
+!
+,
+(7)
+where 𝛽> 0 is a softmax temperature and 𝑐is a constant for
+stability. Minimizing 𝐸(𝝃; X) encourages the query 𝝃to retrieve
+the most aligned pattern from X, effectively performing associative
+retrieval. The first term ensures the finiteness of the query norm,
+preventing it from growing uncontrollably. The second term (lse
+denotes log-sum-exp) promotes soft alignment between the query
+and the stored patterns by rewarding higher similarity. The update
+rule for minimizing the energy corresponds to a gradient descent
+step with a learning rate 𝜂:
+𝝃←𝝃−𝜂∇𝝃𝐸(𝝃; X) = 𝝃−softmax(𝛽𝝃⊤X)X⊤.
+(8)
+In this formulation, each updated query 𝝃is softly pulled toward the
+combination of stored patterns weighted by their attention scores.
+This energy framework can be naturally extended to model the
+interaction between student and teacher representations. Specif-
+ically, letting Q𝑠∈R𝑁×𝑑denote the set of student queries and
+K𝑡∈R𝑁×𝑑the set of teacher keys, the energy can be generalized
+as:
+𝐸(Q𝑠; K𝑡) = 𝛼
+2 diag(K𝑡K⊤
+𝑡) −
+𝑁
+∑︁
+𝑖=1
+lse(Q𝑠k⊤
+𝑡,𝑖, 𝛽) + 𝑐, (9a)
+𝐸(K𝑡) = lse
+ 1
+2diag(K𝑡K⊤
+𝑡), 1
+
+= log
+𝑁
+∑︁
+𝑖=1
+exp
+ 1
+2k𝑡,𝑖k⊤
+𝑡,𝑖
+
++ 𝑐, (9b)
+where 𝛼≥0 regularizes the norm of the teacher keys, and k𝑡,𝑖
+denotes the 𝑖-th teacher key vector. Under this energy formulation,
+minimizing 𝐸(Q𝑠; K𝑡) aligns the student queries with the most rel-
+evant teacher keys, enabling consistent attention patterns between
+the two streams while preserving diversity through regularization.
+Teacher Attention Update Rule. To align the semantic and collab-
+orative streams, we aim to minimize the energy function 𝐸(Q𝑠; K𝑡)
+between student queries and teacher keys. This minimization can
+be interpreted as finding a maximum a posteriori probability esti-
+mate of the teacher keys K𝑡given a set of observed student queries
+Q𝑠:
+𝑝(K𝑡| Q𝑠) = 𝑝(Q𝑠| K𝑡)𝑝(K𝑡)
+𝑝(Q𝑠)
+,
+(10)
+6577
+WWW’26，2026年4月13日至17日，阿联酋迪拜
+HeoByungmoon等人
+其中usem∈R𝑑表示语义表示流中的最终用户嵌入，𝜃表示
+序列编码器的参数。
+协同表示流。与语义流并行，我们维护一个可训练的协同嵌入
+矩阵Ecol ∈R|I|×𝑑，它直接从用户‑物品交互数据中学习。给
+定用户的交互历史序列，我们检索相应的协同嵌入以形成序列
+Scol= [ecol1，...，ecol𝑛𝑢]。然后，该序列由共享序列编码
+器 𝑓𝜃处理，以推导出用户的协同偏好表示：
+ucol = 𝑓𝜃(Scol),
+(4)
+其中ucol∈R𝑑。为了缓解预训练语义嵌入和随机初始化协同
+嵌入之间的训练不平衡，我们通过主成分分析（PCA）[33]将
+缓存的语义嵌入矩阵Esem投影到低维空间来初始化Ecol。
+这种初始化策略利用语义信息，提供更稳定和有效的优化过程，
+尤其是在训练的早期阶段[7]。此外，我们在语义流和协同流
+之间采用共享序列编码器，这不仅提高了参数效率，还促进了
+跨不同表示空间的连贯序列建模 [26, 40]。通过通过语义流和
+协同流联合建模用户偏好，我们旨在捕获丰富的语义信息和协
+同关系模式，最终提升序列推荐性能。
+评分和排序目标。为了计算最终的推荐分数，我们将两个流
+中的嵌入连接起来，并计算连接向量的内积：
+𝑃(𝑖𝑛𝑢+1 = 𝑖| S𝑢
+1:𝑛𝑢) = Concat(esem
+𝑖
+, ecol
+𝑖
+)⊤· Concat(usem, ucol).
+(5)
+该模型使用成对排序损失进行优化，该损失鼓励将正样
+本项目排在负样本项目之上：
+LRank = −
+∑︁
+𝑢∈U
+𝑛𝑢
+∑︁
+𝑘=1
+log𝜎
+
+𝑃(𝑖+
+𝑘+1 | S𝑢
+1:𝑘) −𝑃(𝑖−
+𝑘+1 | S𝑢
+1:𝑘)
+
+,
+(6)
+其中𝑖+
+𝑘+1 和 𝑖−
+𝑘+1 分别表示序列中位置 𝑘+ 1 处的真实项目和
+负样本项目。排序损失的公式可能因骨干模型而略有不同。例
+如，GRU4Rec采用序列到单例的训练目标，其中损失仅基于
+输入序列的最终隐藏状态计算一次（即省略了 Í𝑛𝑢
+𝑘=1 项，并且
+仅根据S
+𝑢
+1:𝑛𝑢对 𝑖𝑛𝑢+1 进行预测）。
+3.2FlipClass：师生注意力对齐
+动机。虽然语义流和协同流能够捕捉互补的信号，但在训练过程中，它们的注意力模式
+可能会逐渐分离，特别是对于长尾用户和物品。受近期关于Hopfield网络和基于能量的
+对齐[25,34], 的研究启发，我们将一个流（例如，语义流）的注意力表示解释为存储的模
+式，而将另一个流（例如，协同流）的表示解释为查询模式，或者反过来。这种设计尤
+其受到以下观察的启发：当交互数据稀疏时，基于LLM的语义表示更有效，而协同过滤
+方法在存在足够交互数据时表现更好 [25,。通过迭代地将一个流的键对齐到另一个流的
+查询上，我们鼓励两个流共享一个共同的注意力空间并保持一致性。
+这种设计尤其受到以下观察的启发：当交互数据稀疏时，基于
+LLM的语义表示更有效，而协同过滤方法在存在足够交互数据
+时表现更好 [19]。通过迭代地将一个流的键对齐到另一个流
+的查询上，我们鼓励两个流共享一个共同的注意力空间并保持
+一致性。
+能量公式。为了建模语义流和协同流之间的对齐关系，我们采
+用了一种受联想记忆模型启发的能量公式。遵循Hopfield网络
+[25], 的能量视角，我们首先定义查询 𝝃∈R𝑑相对于存储模
+式X = [x1,∙∙∙,x𝑁] ∈R𝑑×𝑁的能量 𝑁：
+𝐸(𝝃; X) = 1
+2𝝃⊤𝝃−lse(X⊤𝝃, 𝛽) + 𝑐,
+with lse(v, 𝛽) := 𝛽−1 log
+ 𝑁
+∑︁
+𝑖=1
+exp(𝛽𝑣𝑖)
+!
+,
+(7)
+𝛽> 0 表示softmax温度系数，𝑐表示用于稳定性的常数。最
+小化𝐸(𝝃;X)鼓励查询𝝃从X中检索最对齐的模式，从而有效执
+行关联检索。第一项确保查询范数的有限性，防止其无限制增
+长。第二项（lse表示log‑sum‑exp）通过奖励更高的相似度来
+促进查询与存储模式之间的软对齐。最小化能量的更新规则对
+应于一个学习率为𝜂的梯度下降步骤：
+𝝃←𝝃−𝜂∇𝝃𝐸(𝝃; X) = 𝝃−softmax(𝛽𝝃⊤X)X⊤.
+(8)
+在这个公式中，每个更新的查询𝝃会被软地向存储模式的组合
+拉动，该组合由其注意力分数加权。这种能量框架可以自然地
+扩展到模拟学生和教师表示之间的交互。具体来说，令Q
+𝑠∈R𝑁×𝑑表示学生查询集，K𝑡∈R𝑁×𝑑表示教师键集，能量
+可以推广为：
+𝐸(Q𝑠; K𝑡) = 𝛼
+2 diag(K𝑡K⊤
+𝑡) −
+𝑁
+∑︁
+𝑖=1
+lse(Q𝑠k⊤
+𝑡,𝑖, 𝛽) + 𝑐, (9a)
+𝐸(K𝑡) = lse
+ 1
+2diag(K𝑡K⊤
+𝑡), 1
+
+= log
+𝑁
+∑︁
+𝑖=1
+exp
+ 1
+2k𝑡,𝑖k⊤
+𝑡,𝑖
+
++ 𝑐, (9b)
+𝛼≥0 用于规范教师键的范数，而k𝑡,𝑖表示第𝑖个教师键向量。
+在这种能量公式下，最小化𝐸(Q𝑠;K𝑡)使学生查询与最相关的
+教师键对齐，从而在两个流之间实现一致的注意力模式，同时
+通过正则化保留多样性。教师注意力更新规则。为了对齐语义
+流和协作流，我们旨在最小化学生查询和教师键之间的能量函
+数𝐸(Q𝑠;K𝑡)。这种最小化可以解释为在观察到的一组学生查
+询Q𝑠下，教师键K𝑡的最大后验概率估计：
+𝑝(K𝑡| Q𝑠) = 𝑝(Q𝑠| K𝑡)𝑝(K𝑡)
+𝑝(Q𝑠)
+,
+(10)
+6577
+
+FCRLLM: Aligning LLM with Collaborative Filtering for Long-tailed Sequential Recommendation
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+...
+ Do you know
+what to predict
+next item?
+Attention Key
+. . . 
+Attention  Alignment
+. . . 
+. . . 
+I don't know.
+There aren’t
+many
+interactions.
+Attention Query
+Figure 3: Framework of FlipClass demonstrating teacher-
+student interaction, where the teacher’s and student’s atten-
+tion is aligned by Eq. 12.
+where 𝑝(Q𝑠| K𝑡) and 𝑝(K𝑡) are energy-based probability models
+derived from 𝐸(Q𝑠; K𝑡) and 𝐸(K𝑡), respectively. The gradient of
+the log-posterior is approximated as:
+∇K𝑡log𝑝(K𝑡| Q𝑠) = − ∇K𝑡𝐸(Q𝑠; K𝑡) + ∇K𝑡𝐸(K𝑡)
+= sm(𝛽Q𝑠K⊤
+𝑡)Q𝑠−
+
+𝛼I + D
+
+sm
+ 1
+2diag(K𝑡K⊤
+𝑡)
+
+K𝑡,
+(11)
+where sm(v) := exp (v −lse(v, 1)) denotes the softmax operator
+applied and D(·) denotes a vector-to-diagonal-matrix operator. The
+teacher keys are then updated as:
+Kupdate
+𝑡
+= K𝑡+ 𝛾update
+"
+ sm  𝛽KQ⊤ QW⊤
+𝐾
+
+−
+
+𝛼I + D
+
+sm
+ 1
+2 diag  KK⊤
+KW⊤
+𝐾
+#
+,
+(12)
+where 𝛾update is a hyperparameter. This update rule softly adjusts
+the teacher attention patterns toward the student queries, facilitat-
+ing dynamic alignment between the semantic and collaborative rep-
+resentation spaces. Through this iterative refinement, the teacher
+not only imparts semantic knowledge to the student but also adapts
+based on the student’s evolving representation, fostering a more
+coherent and robust learning process.
+Bidirectional Teacher-Student Alignment. Rather than relying
+on a single fixed teacher-student direction, our framework incorpo-
+rates two complementary alignment paths to enable more robust
+interaction between the semantic and collaborative streams. Specif-
+ically, we construct two parallel modules: one where the semantic
+representation acts as the teacher and the collaborative represen-
+tation serves as the student, which we refer to as ST (Semantic
+Teacher); and another where the collaborative representation acts
+as the teacher and the semantic representation serves as the student,
+referred to as CT (Collaborative Teacher). Each module indepen-
+dently optimizes a combination of ranking loss and alignment loss
+between the corresponding teacher and student representations.
+An overview of the FlipClass framework is illustrated in Figure 3.
+Summary. Intuitively, our FlipClass performs three operations.
+It first measures attention misalignment to capture how differ-
+ently the teacher and student attend to the data. It then adapts the
+teacher to the student by nudging the teacher’s attention toward
+the student’s focus areas. Finally, it regularizes to preserve prior
+knowledge, preventing the teacher from over-correcting or collaps-
+ing onto limited patterns. Taken together, these steps establish a
+bidirectional learning loop where the teacher guides the student,
+while the student’s feedback simultaneously refines the teacher.
+3.3
+Training and Inference
+Training. We update the collaborative embedding layer, sequence
+encoder, and adapter during training, while freezing the semantic
+embedding layer to preserve the pretrained knowledge from LLMs.
+The overall training objective combines the pairwise ranking loss
+and the alignment losses from both teacher-student directions,
+formulated as:
+Ltotal = LRank + L𝑆𝑇+ L𝐶𝑇,
+(13)
+where L𝑆𝑇and L𝐶𝑇denote the alignment losses for the two direc-
+tions of the FlipClass mechanism.
+Inference. During inference, the FlipClass alignment modules are
+bypassed, and the final recommendation is made solely based on the
+dual-stream modeling of the semantic and collaborative representa-
+tions. Moreover, as the semantic embeddings are precomputed and
+cached, inference can be performed efficiently without querying
+the LLM.
+4
+Experiments
+4.1
+Experimental Setup
+Datasets. We conduct experiments on three widely used real-
+world datasets: Yelp, Amazon Fashion and Beauty. Following prior
+work in sequential recommendation [17, 26], we preprocess the
+datasets and split the interaction sequences accordingly. The statis-
+tics of the preprocessed datasets are summarized in Table 1. Further
+dataset statistics and preprocessing details are provided in Appen-
+dix B.1.
+Table 1: Statistics of the datasets after preprocessing.
+Dataset
+# Users
+# Items
+Interactions
+Avg. length
+Yelp
+15,720
+11,383
+192,214
+12.23
+Fashion
+9,094
+4,722
+34,759
+3.82
+Beauty
+52,204
+57,289
+394,908
+7.56
+Baselines. To evaluate the effectiveness of our approach, we
+compare against a variety of representative baselines built upon
+two widely used backbone models for sequential recommenda-
+tion: GRU4Rec [10] and SASRec [17]. We consider two groups of
+comparison methods. The first group includes traditional long-tail
+enhancement frameworks such as CITIES [14] and MELT [18]. The
+second group consists of recent LLM-based frameworks, including
+RLMRec [35], LLMInit [7, 13], and LLM-ESR [26]. Further imple-
+mentation details of the baselines are provided in Appendix B.2.
+Implementation Details. Our model is implemented in PyTorch,
+and all experiments are conducted on an NVIDIA A100 GPU with
+40GB memory. For the FlipClass alignment module, we search 𝛼, 𝛽
+and 𝛾update from the set {0.3, 0.5, 0.7}, and 𝛾fc from {0.1, 0.5, 1.0}.
+Additional implementation details are provided in Appendix B.3.
+The implementation code is available here.
+6578
+FCRLLM：将LLM与协同过滤对齐以实现长尾序列推荐
+WWW'26，2026年4月13日至17日，阿联酋迪拜
+...
+你知道吗
+要预测什么
+下一个项目？
+注意力键
+...
+注意力对齐
+...
+...
+我不知道。
+没有
+many
+互动。
+注意力查询
+图3：FlipClass框架展示了教师-学生交互，其中教师和学生
+的注意力通过公式12对齐。
+其中 𝑝(Q𝑠|K𝑡)和 𝑝(K𝑡)分别是从 𝐸(Q𝑠;K𝑡)和 𝐸(K𝑡)推导
+出的基于能量的概率模型。对数后验的梯度近似为：
+∇K𝑡log𝑝(K𝑡| Q𝑠) = − ∇K𝑡𝐸(Q𝑠; K𝑡) + ∇K𝑡𝐸(K𝑡)
+= sm(𝛽Q𝑠K⊤
+𝑡)Q𝑠−
+
+𝛼I + D
+
+sm
+ 1
+2diag(K𝑡K⊤
+𝑡)
+
+K𝑡,
+(11)
+其中sm(v)：= exp(v −lse(v,1))表示应用的softmax算子，
+D(∙)表示一个向量到对角矩阵的算子。教师键随后更新为：
+Kupdate
+𝑡
+= K𝑡+ 𝛾update
+"
+ sm  𝛽KQ⊤ QW⊤
+𝐾
+
+−
+
+𝛼I + D
+
+sm
+ 1
+2 diag  KK⊤
+KW⊤
+𝐾
+#
+,
+(12)
+其中𝛾update是一个超参数。此更新规则使教师注意力模式柔
+和地调整到学生查询，促进语义和协同表示空间之间的动态对
+齐。通过这种迭代优化，教师不仅向学生传授语义知识，还根
+据学生不断变化的表示进行适应，从而促进更连贯和鲁棒的学
+习过程。
+双向师生对齐。我们的框架并非依赖单一固定的师生方向，而
+是整合了两个互补的对齐路径，以实现语义流和协同流之间更
+鲁棒的交互。具体来说，我们构建了两个并行模块：一个模块
+中，语义表征作为教师，协同表征作为学生，我们称之为ST
+（语义教师）；另一个模块中，协同表征作为教师，语义表征
+作为学生，我们称之为CT（协同教师）。每个模块独立优化
+对应教师和学生表征之间的排名损失和对齐损失的组合。
+FlipClass框架的概述如图3所示。总结。直观地看，我们的
+FlipClass执行三种操作。它首先测量注意力不对齐，以捕捉教
+师和学生关注数据的不同方式。然后通过将教师的注意力引导
+至学生的关注区域，来适应教师到学生。最后，它通过正则化
+来保留先验知识，防止教师过度纠正或坍缩到有限模式上。综
+合来看，这些步骤建立了一个双向学习循环，其中教师指导学
+生，而学生的反馈同时完善教师。
+知识，防止教师过度纠正或坍缩到有限模式上。综合来看，这
+些步骤建立了一个双向学习循环，其中教师指导学生，而学生
+的反馈同时完善教师。
+3.3训练和推理
+训练。在训练过程中，我们更新协同嵌入层、序列编码器和适
+配器，同时冻结语义嵌入层以保留来自大型语言模型的预训练
+知识。整体训练目标结合了成对排序损失和来自两个教师‑学
+生方向的对齐损失，表示为：
+Ltotal = LRank + L𝑆𝑇+ L𝐶𝑇,
+(13)
+其中L𝑆𝑇和L𝐶𝑇表示FlipClass机制两个方向的对齐损失。
+推理。在推理过程中，FlipClass对齐模块会被绕过，最终的
+推荐完全基于语义和协同表示的双流建模。此外，由于语义嵌
+入是预先计算并缓存的，因此无需查询大型语言模型即可高效
+执行推理。
+4实验部分
+4.1实验设置
+数据集。我们在三个广泛使用的真实世界数据集上进行了
+实验：Yelp、AmazonFashionandBeauty。遵循先前在序
+列推荐 [17, 26], 中的工作，我们对数据集进行预处理并相应地
+分割交互序列。预处理后的数据集统计信息汇总在表1中。
+更多数据集统计信息和预处理细节见附录B.1。
+表1：预处理后数据集的统计信息。
+数据集
+#用户数
+#物品数
+交互
+平均长度
+Yelp
+15,720
+11,383
+192,214
+12.23
+时尚
+9,094
+4,722
+34,759
+3.82
+美
+52,204
+57,289
+394,908
+7.56
+基线。为了评估我们方法的有效性，我们将其与基于两种
+广泛使用的序列推荐骨干模型构建的多种代表性基线进行比较：
+GRU4Rec [10] 和SASRec [17]。我们考虑了两组比较方法。
+第一组包括传统的长尾增强框架，如CITIES [14] 和MELT [18]。
+第二组由最近的基于LLM的框架组成，包括RLMRec [35], 、
+LLMInit [7, 13], 和LLM‑ESR [26]。基线的进一步实现细节在
+附录B.2中提供。
+实现细节。我们的模型使用PyTorch实现，所有实验均
+在40GB显存的NVIDIAA100GPU上进行。对于
+FlipClass对齐模块，我们从集合{0.3,0.5,0.7}中搜索 𝛼、
+𝛽和𝛾更新，从{0.1,0.5,1.0}中搜索𝛾fc，更多实现细节
+请参见附录B.3。实现代码已在此处提供。
+6578
+
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+Byungmoon Heo et al.
+Table 2: The overall results of competing baselines and our FCRLLM. The boldface refers to the best score and the underline
+indicates the next best result of the models. Statistical significance at 𝑝< 0.05 compared to the best baseline method.
+Dataset
+Model
+Overall
+Tail Item
+Head Item
+Tail User
+Head User
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+Yelp
+GRU4Rec
+0.4879
+0.2751
+0.0171
+0.0059
+0.6265
+0.3544
+0.4919
+0.2777
+0.4726
+0.2653
+- CITIES
+0.4898
+0.2749
+0.0134
+0.0051
+0.6301
+0.3543
+0.4936
+0.2783
+0.4756
+0.2618
+- MELT
+0.4985
+0.2825
+0.0201
+0.0079
+0.6393
+0.3633
+0.5046
+0.2865
+0.4750
+0.2671
+- RLMRec
+0.4886
+0.2777
+0.0188
+0.0067
+0.6269
+0.3574
+0.4920
+0.2804
+0.4756
+0.2671
+- LLMInit
+0.4872
+0.2749
+0.0201
+0.0072
+0.6246
+0.3537
+0.4908
+0.2775
+0.4732
+0.2647
+- LLM-ESR
+0.5724
+0.3413
+0.0763
+0.0318
+0.7184
+0.4324
+0.5782
+0.3456
+0.5501
+0.3247
+- FCRLLM
+0.5955
+0.3622
+0.0942
+0.0387
+0.7430
+0.4574
+0.5967
+0.3635
+0.5907
+0.3573
+Improvement
+4.04%
+6.12%
+23.46%
+21.70%
+3.42%
+5.78%
+3.20%
+5.18%
+7.38%
+10.04%
+SASRec
+0.5940
+0.3597
+0.1142
+0.0495
+0.7353
+0.4511
+0.5893
+0.3578
+0.6122
+0.3672
+- CITIES
+0.5828
+0.3540
+0.1532
+0.0700
+0.7093
+0.4376
+0.5785
+0.3511
+0.5994
+0.3649
+- MELT
+0.6257
+0.3791
+0.1015
+0.0371
+0.7801
+0.4799
+0.6246
+0.3804
+0.6299
+0.3744
+- RLMRec
+0.5990
+0.3623
+0.0953
+0.0412
+0.7474
+0.4568
+0.5966
+0.3613
+0.6084
+0.3658
+- LLMInit
+0.6415
+0.3997
+0.1760
+0.0789
+0.7785
+0.4941
+0.6403
+0.4010
+0.6462
+0.3948
+- LLM-ESR
+0.6673
+0.4208
+0.1893
+0.0845
+0.8080
+0.5199
+0.6685
+0.4229
+0.6627
+0.4128
+- FCRLLM
+0.6748
+0.4262
+0.2136
+0.0977
+0.8105
+0.5229
+0.6736
+0.4268
+0.6793
+0.4237
+Improvement
+1.12%
+1.28%
+12.84%
+15.62%
+0.31%
+0.58%
+0.76%
+0.92%
+2.50%
+2.64%
+Fashion
+GRU4Rec
+0.4798
+0.3809
+0.0257
+0.0101
+0.6606
+0.5285
+0.3781
+0.2577
+0.6118
+0.5408
+- CITIES
+0.4762
+0.3743
+0.0252
+0.0103
+0.6557
+0.5191
+0.3729
+0.2501
+0.6103
+0.5354
+- MELT
+0.4884
+0.3975
+0.0291
+0.0112
+0.6712
+0.5513
+0.3890
+0.2770
+0.6173
+0.5538
+- RLMRec
+0.4795
+0.3808
+0.0253
+0.0105
+0.6603
+0.5282
+0.3773
+0.2577
+0.6120
+0.5405
+- LLMInit
+0.4864
+0.4095
+0.0250
+0.0104
+0.6702
+0.5684
+0.3852
+0.2973
+0.6177
+0.5550
+- LLM-ESR
+0.5409
+0.4567
+0.0807
+0.0384
+0.7242
+0.6233
+0.4560
+0.3568
+0.6512
+0.5864
+- FCRLLM
+0.5587
+0.4666
+0.0907
+0.0397
+0.7450
+0.6365
+0.4746
+0.3624
+0.6678
+0.6017
+Improvement
+3.29%
+2.17%
+12.39%
+3.39%
+2.87%
+2.12%
+4.08%
+1.57%
+2.55%
+2.61%
+SASRec
+0.4956
+0.4429
+0.0454
+0.0235
+0.6748
+0.6099
+0.3967
+0.3390
+0.6239
+0.5777
+- CITIES
+0.4923
+0.4423
+0.0407
+0.0214
+0.6721
+0.6098
+0.3936
+0.3392
+0.6203
+0.5760
+- MELT
+0.4875
+0.4150
+0.0368
+0.0144
+0.6670
+0.5745
+0.3792
+0.2933
+0.6280
+0.5729
+- RLMRec
+0.4982
+0.4457
+0.0410
+0.0223
+0.6803
+0.6143
+0.3990
+0.3415
+0.6270
+0.5808
+- LLMInit
+0.5119
+0.4492
+0.0596
+0.0305
+0.6920
+0.6159
+0.4184
+0.3501
+0.6332
+0.5777
+- LLM-ESR
+0.5619
+0.4743
+0.1095
+0.0520
+0.7420
+0.6424
+0.4811
+0.3769
+0.6668
+0.6005
+- FCRLLM
+0.5814
+0.4881
+0.1312
+0.0649
+0.7606
+0.6565
+0.5044
+0.3920
+0.6812
+0.6127
+Improvement
+3.47%
+2.91%
+19.82%
+24.81%
+2.51%
+2.19%
+4.84%
+4.01%
+2.16%
+2.03%
+Beauty
+GRU4Rec
+0.3683
+0.2276
+0.0796
+0.0567
+0.4371
+0.2683
+0.3584
+0.2191
+0.4135
+0.2663
+- CITIES
+0.2456
+0.1400
+0.1122
+0.0760
+0.2774
+0.1552
+0.2382
+0.1346
+0.2795
+0.1645
+- MELT
+0.3702
+0.2161
+0.0009
+0.0003
+0.4582
+0.2675
+0.3637
+0.2116
+0.3997
+0.2365
+- RLMRec
+0.3668
+0.2278
+0.0780
+0.0560
+0.4357
+0.2688
+0.3576
+0.2202
+0.4089
+0.2626
+- LLMInit
+0.4151
+0.2713
+0.0896
+0.0637
+0.4928
+0.3208
+0.4059
+0.2621
+0.4571
+0.3133
+- LLM-ESR
+0.4917
+0.3140
+0.1547
+0.0801
+0.5721
+0.3698
+0.4851
+0.3079
+0.5220
+0.3420
+- FCRLLM
+0.5253
+0.3509
+0.1623
+0.0940
+0.6118
+0.4121
+0.5169
+0.3418
+0.5634
+0.3923
+Improvement
+6.83%
+11.75%
+4.91%
+17.35%
+6.94%
+11.44%
+6.56%
+11.01%
+7.93%
+14.71%
+SASRec
+0.4388
+0.3030
+0.0870
+0.0649
+0.5227
+0.3598
+0.4270
+0.2941
+0.4926
+0.3438
+- CITIES
+0.2256
+0.1413
+0.1363
+0.0897
+0.2468
+0.1536
+0.2215
+0.1406
+0.2441
+0.1444
+- MELT
+0.4334
+0.2775
+0.0460
+0.0172
+0.5258
+0.3995
+0.4233
+0.2673
+0.4796
+0.3241
+- RLMRec
+0.4460
+0.3075
+0.0924
+0.0658
+0.5303
+0.3652
+0.4365
+0.3016
+0.4892
+0.3345
+- LLMInit
+0.5455
+0.3656
+0.1714
+0.0965
+0.6347
+0.4298
+0.5359
+0.3592
+0.5893
+0.3948
+- LLM-ESR
+0.5672
+0.3713
+0.2257
+0.1108
+0.6486
+0.4334
+0.5581
+0.3643
+0.6087
+0.4032
+- FCRLLM
+0.5997
+0.4098
+0.2467
+0.1350
+0.6838
+0.4753
+0.5885
+0.4023
+0.6508
+0.4442
+Improvement
+5.73%
+10.37%
+9.30%
+21.84%
+5.43%
+9.67%
+5.45%
+10.43%
+6.92%
+10.17%
+Evaluation Metrics. We evaluate model performance based on
+top-10 recommendation results, using two standard metrics: Hit
+Rate (H@10) and Normalized Discounted Cumulative Gain (N@10).
+Following [17], we randomly sample 100 negative items for each
+user that they have not interacted with, and evaluate the model by
+ranking these along with the ground-truth item.
+4.2
+Overall Performance
+Overall Comparison. Table 2 presents the overall, tail, and head
+performance across three real-world datasets. Our proposed FCR-
+LLM achieves the best accuracy across all evaluation metrics and
+datasets, outperforming all baseline methods regardless of the back-
+bone model. This demonstrates the effectiveness of our alignment-
+aware design in jointly leveraging both semantic and collabora-
+tive signals. LLM-ESR ranks second overall, demonstrating the
+6579
+WWW‘26，2026年4月13日至17日，阿联酋迪拜
+河邦珉等
+表2：竞争基线模型和我们的FCRLLM的整体结果。加粗表示最佳分数，下划线表示模型次优结果。与最佳基线方法相比，𝑝< 00.05显
+著性水平。
+数据集
+模型
+整体
+尾项
+首项
+尾用户
+首用户
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+Yelp
+GRU4Rec
+0.4879
+0.2751
+0.0171
+0.0059
+0.6265
+0.3544
+0.4919
+0.2777
+0.4726
+0.2653
+‑CITIES
+0.4898
+0.2749
+0.0134
+0.0051
+0.6301
+0.3543
+0.4936
+0.2783
+0.4756
+0.2618
+‑MELT
+0.4985
+0.2825
+0.0201
+0.0079
+0.6393
+0.3633
+0.5046
+0.2865
+0.4750
+0.2671
+‑RLMRec
+0.4886
+0.2777
+0.0188
+0.0067
+0.6269
+0.3574
+0.4920
+0.2804
+0.4756
+0.2671
+‑LLMInit
+0.4872
+0.2749
+0.0201
+0.0072
+0.6246
+0.3537
+0.4908
+0.2775
+0.4732
+0.2647
+‑LLM‑ESR
+0.5724
+0.3413
+0.0763
+0.0318
+0.7184
+0.4324
+0.5782
+0.3456
+0.5501
+0.3247
+-FCRLLM
+0.5955
+0.3622
+0.0942
+0.0387
+0.7430
+0.4574
+0.5967
+0.3635
+0.5907
+0.3573
+改进
+4.04%
+6.12%
+23.46%
+21.70%
+3.42%
+5.78%
+3.20%
+5.18%
+7.38%
+10.04%
+SASRec
+0.5940
+0.3597
+0.1142
+0.0495
+0.7353
+0.4511
+0.5893
+0.3578
+0.6122
+0.3672
+‑城市
+0.5828
+0.3540
+0.1532
+0.0700
+0.7093
+0.4376
+0.5785
+0.3511
+0.5994
+0.3649
+‑MELT
+0.6257
+0.3791
+0.1015
+0.0371
+0.7801
+0.4799
+0.6246
+0.3804
+0.6299
+0.3744
+‑RLMRec
+0.5990
+0.3623
+0.0953
+0.0412
+0.7474
+0.4568
+0.5966
+0.3613
+0.6084
+0.3658
+‑LLMInit
+0.6415
+0.3997
+0.1760
+0.0789
+0.7785
+0.4941
+0.6403
+0.4010
+0.6462
+0.3948
+‑LLM‑ESR
+0.6673
+0.4208
+0.1893
+0.0845
+0.8080
+0.5199
+0.6685
+0.4229
+0.6627
+0.4128
+-FCRLLM
+0.6748
+0.4262
+0.2136
+0.0977
+0.8105
+0.5229
+0.6736
+0.4268
+0.6793
+0.4237
+改进
+1.12%
+1.28%
+12.84%
+15.62%
+0.31%
+0.58%
+0.76%
+0.92%
+2.50%
+2.64%
+时尚
+GRU4Rec
+0.4798
+0.3809
+0.0257
+0.0101
+0.6606
+0.5285
+0.3781
+0.2577
+0.6118
+0.5408
+‑城市
+0.4762
+0.3743
+0.0252
+0.0103
+0.6557
+0.5191
+0.3729
+0.2501
+0.6103
+0.5354
+‑熔化
+0.4884
+0.3975
+0.0291
+0.0112
+0.6712
+0.5513
+0.3890
+0.2770
+0.6173
+0.5538
+‑RLMRec
+0.4795
+0.3808
+0.0253
+0.0105
+0.6603
+0.5282
+0.3773
+0.2577
+0.6120
+0.5405
+‑LLMInit
+0.4864
+0.4095
+0.0250
+0.0104
+0.6702
+0.5684
+0.3852
+0.2973
+0.6177
+0.5550
+‑LLM‑ESR
+0.5409
+0.4567
+0.0807
+0.0384
+0.7242
+0.6233
+0.4560
+0.3568
+0.6512
+0.5864
+-FCRLLM
+0.5587
+0.4666
+0.0907
+0.0397
+0.7450
+0.6365
+0.4746
+0.3624
+0.6678
+0.6017
+改进
+3.29%
+2.17%
+12.39%
+3.39%
+2.87%
+2.12%
+4.08%
+1.57%
+2.55%
+2.61%
+SASRec
+0.4956
+0.4429
+0.0454
+0.0235
+0.6748
+0.6099
+0.3967
+0.3390
+0.6239
+0.5777
+‑城市
+0.4923
+0.4423
+0.0407
+0.0214
+0.6721
+0.6098
+0.3936
+0.3392
+0.6203
+0.5760
+‑熔化
+0.4875
+0.4150
+0.0368
+0.0144
+0.6670
+0.5745
+0.3792
+0.2933
+0.6280
+0.5729
+‑RLMRec
+0.4982
+0.4457
+0.0410
+0.0223
+0.6803
+0.6143
+0.3990
+0.3415
+0.6270
+0.5808
+‑LLMInit
+0.5119
+0.4492
+0.0596
+0.0305
+0.6920
+0.6159
+0.4184
+0.3501
+0.6332
+0.5777
+‑LLM‑ESR
+0.5619
+0.4743
+0.1095
+0.0520
+0.7420
+0.6424
+0.4811
+0.3769
+0.6668
+0.6005
+-FCRLLM
+0.5814
+0.4881
+0.1312
+0.0649
+0.7606
+0.6565
+0.5044
+0.3920
+0.6812
+0.6127
+改进
+3.47%
+2.91%
+19.82%
+24.81%
+2.51%
+2.19%
+4.84%
+4.01%
+2.16%
+2.03%
+美丽
+GRU4Rec
+0.3683
+0.2276
+0.0796
+0.0567
+0.4371
+0.2683
+0.3584
+0.2191
+0.4135
+0.2663
+‑CITIES
+0.2456
+0.1400
+0.1122
+0.0760
+0.2774
+0.1552
+0.2382
+0.1346
+0.2795
+0.1645
+‑MELT
+0.3702
+0.2161
+0.0009
+0.0003
+0.4582
+0.2675
+0.3637
+0.2116
+0.3997
+0.2365
+‑RLMRec
+0.3668
+0.2278
+0.0780
+0.0560
+0.4357
+0.2688
+0.3576
+0.2202
+0.4089
+0.2626
+‑LLMInit
+0.4151
+0.2713
+0.0896
+0.0637
+0.4928
+0.3208
+0.4059
+0.2621
+0.4571
+0.3133
+‑LLM‑ESR
+0.4917
+0.3140
+0.1547
+0.0801
+0.5721
+0.3698
+0.4851
+0.3079
+0.5220
+0.3420
+-FCRLLM
+0.5253
+0.3509
+0.1623
+0.0940
+0.6118
+0.4121
+0.5169
+0.3418
+0.5634
+0.3923
+改进
+6.83%
+11.75%
+4.91%
+17.35%
+6.94%
+11.44%
+6.56%
+11.01%
+7.93%
+14.71%
+SASRec
+0.4388
+0.3030
+0.0870
+0.0649
+0.5227
+0.3598
+0.4270
+0.2941
+0.4926
+0.3438
+‑CITIES
+0.2256
+0.1413
+0.1363
+0.0897
+0.2468
+0.1536
+0.2215
+0.1406
+0.2441
+0.1444
+‑MELT
+0.4334
+0.2775
+0.0460
+0.0172
+0.5258
+0.3995
+0.4233
+0.2673
+0.4796
+0.3241
+‑RLMRec
+0.4460
+0.3075
+0.0924
+0.0658
+0.5303
+0.3652
+0.4365
+0.3016
+0.4892
+0.3345
+‑LLMInit
+0.5455
+0.3656
+0.1714
+0.0965
+0.6347
+0.4298
+0.5359
+0.3592
+0.5893
+0.3948
+‑LLM‑ESR
+0.5672
+0.3713
+0.2257
+0.1108
+0.6486
+0.4334
+0.5581
+0.3643
+0.6087
+0.4032
+-FCRLLM
+0.5997
+0.4098
+0.2467
+0.1350
+0.6838
+0.4753
+0.5885
+0.4023
+0.6508
+0.4442
+改进
+5.73%
+10.37%
+9.30%
+21.84%
+5.43%
+9.67%
+5.45%
+10.43%
+6.92%
+10.17%
+评估指标。我们基于top‑10推荐结果评估模型性能，使
+用两个标准指标：命中率（H@10）和归一化折扣累积增益
+（N@10）。遵循 [17], ，我们为每个用户随机采样100个其
+未交互过的负样本，并通过将这些样本与真实物品一起排序来
+评估模型。
+4.2整体性能
+总体对比。表2展示了在三个真实世界数据集上的整体、尾部和头部性能。我们提
+出的FCR‑LLM在所有评估指标和数据集上都取得了最佳准确率，无论骨干模型如何，
+都优于所有基线方法。这证明了我们协同利用语义和协同信号的对齐感知设计的有
+效性。LLM‑ESR总体排名第二，展示了其双视图架构结合检索增强自蒸馏在提升推
+荐性能方面的有效性。LLMInit通常紧随其后，突出了将大型语言模型的语义知识
+注入序列推荐中的好处。非LLM基线如MELT通过解决用户端和物品端的稀疏性问
+题实现了适度改进，而CITIES在不同数据集和设置上的表现则不一致。
+6579
+
+FCRLLM: Aligning LLM with Collaborative Filtering for Long-tailed Sequential Recommendation
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+(a) 𝛼
+(b) 𝛽
+(c) 𝛾update
+(d) 𝛾fc
+Figure 4: Hyperparameter sensitivity on the Beauty dataset with SASRec backbone.
+Table 3: The ablation study on the Beauty dataset with
+GRU4Rec as the backbone model.
+Model
+Overall
+Tail Item
+Head Item
+Tail User
+Head User
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+FCRLLM
+0.5253
+0.3509
+0.1623
+0.0940
+0.6118
+0.4121
+0.5169
+0.3418
+0.5634
+0.3923
+w/o FlipClass
+0.5081
+0.3397
+0.1447
+0.0880
+0.5948
+0.3998
+0.5001
+0.3308
+0.5448
+0.3807
+w/o ST
+0.5115
+0.3368
+0.1545
+0.0828
+0.5966
+0.3973
+0.5034
+0.3276
+0.5487
+0.3787
+w/o CT
+0.5151
+0.3382
+0.1636
+0.0859
+0.5989
+0.3984
+0.5066
+0.3292
+0.5541
+0.3797
+effectiveness of its dual-view architecture combined with retrieval-
+augmented self-distillation in enhancing recommendation perfor-
+mance. LLMInit often follows closely, highlighting the benefit of
+injecting semantic knowledge from large language models into se-
+quential recommendation. Non-LLM baselines such as MELT show
+moderate improvements by addressing both user- and item-side
+sparsity, while CITIES performs inconsistently across datasets and
+settings.
+Long-tail Item and User Comparison. As presented in Table 2,
+we report performance separately for head and tail groups of both
+users and items. Our proposed FCRLLM consistently achieves strong
+results across all groups, demonstrating its robustness. In particu-
+lar, it yields substantial improvements on tail items, achieving on
+average a 13.7% gain in H@10 and a 17.2% gain in N@10 across all
+datasets and backbones. These results highlight the strength of our
+FlipClass in effectively leveraging semantic information from LLMs
+to complement collaborative signals. For tail users, FCRLLM again
+shows the best performance, while MELT and LLMInit offer mod-
+erate improvements, each limited by their reliance on collaborative
+signals or the lack of explicit user-side semantics.
+4.3
+Ablation Study
+Table 3 shows the ablation results when using GRU4Rec as the
+backbone sequential model. When the entire FlipClass module is
+removed (w/o FlipClass), performance consistently drops across
+all user and item groups, confirming its critical role. Excluding
+either ST (w/o ST) or CT (w/o CT) alignment also leads to degraded
+performance, which demonstrates the effectiveness of jointly lever-
+aging both alignment directions. Overall, incorporating both ST
+and CT enables FCRLLM to achieve the most balanced and robust
+performance across all groups. These findings further validate that
+FlipClass provides a reliable alignment mechanism that consistently
+enhances recommendation performance.
+4.4
+Hyperparameter Sensitivity
+To investigate the effects of the core hyperparameters in FCRLLM,
+we present their performance trends in Figure 4. Each of the four
+hyperparameters corresponds to a distinct part of the FlipClass
+mechanism in Eq. 12. Specifically, 𝛼controls the strength of the L2
+penalty on the teacher keys in the energy term 𝐸(Q𝑠; K𝑡), and 𝛽
+adjusts the softmax temperature that governs attention sharpness
+in both the energy and the update rule. 𝛾update scales the magni-
+tude of the teacher attention update, determining how strongly
+the teacher aligns to the student. Lastly, 𝛾fc controls the weight
+of the FlipClass alignment loss in the overall training objective.
+The optimal hyperparameter configurations for each dataset are
+summarized in Table 4.
+4.5
+Group Analysis
+To conduct a more fine-grained analysis, we divide users and items
+into five groups based on sequence length and popularity. The re-
+sults are presented in Figure 5. Based on the results, FCRLLM consis-
+tently achieves the best performance across all user and item groups,
+outperforming all baselines. Meanwhile, SASRec, as a CF model,
+updates item representations more frequently for popular items,
+since it relies solely on past interaction data. Consequently, SASRec
+yields strong performance in high-frequency regions. Specifically,
+it outperforms LLMInit and LLM-ESR in the head item groups (e.g.,
+item groups 90–159 and ≥160). Nevertheless, FCRLLM consistently
+outperforms all baselines across the entire range, demonstrating
+superiority in long-tail groups, while also maintaining competi-
+tive performance in head groups. This robustness stems from the
+bidirectional alignment mechanism, which enables mutual adapta-
+tion between semantic and collaborative signals, particularly under
+sparse conditions. In addition, by better capturing underrepresented
+items, FCRLLM implicitly promotes diversity in the generated rec-
+ommendations. Additional analysis is provided in Appendix C.1.
+4.6
+Analysis of Alignment Behavior in ST and
+CT Classroom
+To better understand how the two alignment modules behave, we
+visualize the cosine similarity between the queries and keys in the
+ST and CT modules based on a validation sequence. Specifically,
+for each alignment block, we extract the query matrix Q from the
+student stream and the key matrix K from the teacher stream after
+the final update. We then compute the cosine similarity matrix S,
+where S𝑖,𝑗= cos(q𝑖, k𝑗). In Figure 6, each heatmap illustrates the
+similarity pattern between query positions (rows) and key positions
+6580
+FCRLLM：将LLM与协同过滤对齐以用于长尾序列推荐
+WWW'26，2026年4月13日至17日，迪拜，阿拉伯联合酋长国
+(a) 𝛼
+(b) 𝛽
+(c)𝛾update
+(d) 𝛾fc
+图4：在Beauty数据集上使用SASRec主干网络的超参数敏感性分析。
+表3：在Beauty数据集上使用GRU4Rec作为主干模型的消融研究。
+模型
+整体
+尾部项目
+头部项目
+尾用户
+头用户
+H@10N@10H@10N@10H@10N@10H@10N@10H@10N@10
+FCRLLM
+0.52530.35090.16230.09400.61180.41210.51690.34180.56340.3923
+不使用FlipClass
+0.5081
+0.3397
+0.1447
+0.0880
+0.5948
+0.3998
+0.5001
+0.3308
+0.5448
+0.3807
+不含ST
+0.5115
+0.3368
+0.1545
+0.0828
+0.5966
+0.3973
+0.5034
+0.3276
+0.5487
+0.3787
+不含CT
+0.5151
+0.3382
+0.16360.0859
+0.5989
+0.3984
+0.5066
+0.3292
+0.5541
+0.3797
+有效性。LLM‑ESR总体排名第二，展示了其双视图架构结合检
+索增强自蒸馏在提升推荐性能方面的有效性。LLMInit通常紧
+随其后，突出了将大型语言模型的语义知识注入序列推荐中的
+好处。非LLM基线如MELT通过解决用户端和物品端的稀疏性
+问题实现了适度改进，而CITIES在不同数据集和设置上的表
+现则不一致。
+长尾项与用户对比。如表2所示，我们分别报告了用户和项的
+头部和尾部组的性能。我们提出的FCRLLM在所有组中始终取
+得了优异的成果，展示了其鲁棒性。特别是，它在尾部项上取
+得了显著的改进，在所有数据集和骨干网络中，平均在
+H@10上提升了13.7%，在N@10上提升了17.2%。这些结果
+突出了我们FlipClass在有效利用LLM语义信息来补充协同信
+号方面的优势。对于尾部用户，FCRLLM再次表现出最佳性能，
+而MELT和LLMInit提供了适度的改进，每个都受限于它们对
+协同信号或缺乏明确用户侧语义的依赖。
+4.3消融研究
+表3展示了使用GRU4Rec作为骨干序列模型时的消融结果。当
+移除整个FlipClass模块（w/oFlipClass）时，所有用户和物
+品组的表现都持续下降，证实了其关键作用。排除ST（w/o
+ST）或CT（w/oCT）对齐也会导致性能下降，这证明了联合
+利用两个对齐方向的有效性。总体而言，结合ST和CT使
+FCRLLM能够在所有组中实现最平衡和稳健的性能。这些发现
+进一步验证了FlipClass提供了一种可靠的对齐机制，能够持
+续提升推荐性能。
+4.4超参数敏感性
+为探究FCRLLM中核心超参数的影响，我们在图4中展示了
+它们的性能趋势。这四个超参数分别对应Eq.12中
+FlipClass机制的不同部分。具体来说，𝛼控制能量项 𝐸(Q𝑠;
+K𝑡)中教师键的L2惩罚强度，而 𝛽调整softmax温度，该
+温度控制着能量和更新规则中的注意力锐度。𝛾更新缩放教师
+注意力更新的幅度，决定了教师与学生的对齐强度。最后，𝛾
+fc控制FlipClass对齐损失在整体训练目标中的权重。每个
+数据集的最优超参数配置总结在表4中。
+4.5群组分析
+为进行更细粒度的分析，我们根据序列长度和流行度将用户和
+物品分为五个组。结果展示在图5中。根据结果，FCRLLM在
+所有用户和物品组中始终表现最佳，优于所有基线模型。同时，
+SASRec作为协同过滤模型，由于仅依赖过去交互数据，会为
+流行物品更频繁地更新物品表征。因此，SASRec在高频区域
+表现出色。具体来说，它在头部物品组（例如，物品组
+90‑159和≥160）中优于LLMInit和LLM‑ESR。尽管如此，
+FCRLLM在整个范围内始终优于所有基线模型，在长尾组中展
+现出优越性，同时在头部组中也保持了具有竞争力的表现。这
+种鲁棒性源于双向对齐机制，该机制使语义信号和协同信号能
+够相互适应，尤其是在稀疏条件下。此外，通过更好地捕捉代
+表性不足的物品，FCRLLM隐式地促进了生成推荐结果的多样
+性。更多分析内容见附录C.1。
+4.6ST和CT课堂中的一致性行为分析
+为了更好地理解这两个对齐模块的行为，我们基于验证序列可视
+化了ST模块和CT模块中查询与键之间的余弦相似度。具体来说，
+对于每个对齐块，我们提取学生流经最终更新后的查询矩阵Q，
+以及教师流经的键矩阵K。然后我们计算余弦相似度矩阵S，其中
+S𝑖,𝑗= 表示cos(q𝑖,k𝑗)。在图6中，每个热力图展示了序列长度为𝑖
+时，查询位置（行）和键位置（列）之间的相似度模式
+6580
+
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+Byungmoon Heo et al.
+Figure 5: Performance comparison across fine-grained user
+and item groups on the Beauty dataset with SASRec.
+(a) ST
+(b) CT
+Figure 6: Cosine similarity between query and key embed-
+dings from the student and teacher in the ST and CT after
+training on the Yelp dataset using SASRec.
+(columns) within a sequence of length 𝐿= 200. We observe notably
+different structural patterns in the resulting similarity maps. This
+divergence supports our design goal: the ST and CT modules are in-
+dependently parameterized and trained to reflect distinct alignment
+objectives. Although both modules receive the same input, they
+learn to encode different interaction patterns. These complemen-
+tary behaviors are essential for our ensemble-based architecture,
+enabling it to integrate asymmetric signals from semantic and col-
+laborative perspectives.
+5
+Related Work
+5.1
+Sequential Recommendation
+Sequential recommendation (SR) focuses on modeling user be-
+havior sequences to predict the next item. Early efforts, such as
+FPMC [36] and Fossil [8], adopt Markov chains to model item transi-
+tions. With deep learning, SR models have evolved from RNN-based
+GRU4Rec [10] and CNN-based Caser [43] to Transformer-based
+SASRec [17] and BERT4Rec [42]. Recently, MLP-based [58] and
+contrastive learning-based approaches [49] have shown promise in
+boosting performance. While most works focus on enhancing the
+model’s ability to represent complex user-item interactions, fewer
+tackle long-tail issues. CITIES [14] infers representations for tail
+items, and MELT [18] jointly addresses long-tail users and items,
+though from a purely collaborative perspective.
+5.2
+LLMs for Recommendation
+Large language models demonstrate strong semantic understand-
+ing, and their success in NLP has led to increasing efforts to adapt
+them for recommendation tasks [56, 57]. Early approaches primar-
+ily explored prompt engineering and in-context learning [3] to
+repurpose LLMs for recommendation scenarios. For instance, Cha-
+tRec [5] formulates the recommendation task as a step-by-step
+dialogue, while DRDT [47] integrates a retrieval-enhanced con-
+text to guide item prediction. LLMRerank [4] and UniLLMRec [55]
+introduce reasoning-style prompting (e.g., chain-of-thought) tai-
+lored to reranking or full-pipeline recommendation. Despite their
+flexibility, prompt-based methods often fall short of specialized
+recommendation models, primarily due to the gap between the
+natural language objectives of LLM pretraining and the goals of
+recommendation. To bridge this gap, recent works have focused
+on aligning LLMs to recommendation tasks via fine-tuning. Mod-
+els such as P5 [6] and InstructRec [53] employ instruction tuning
+on domain-specific corpora, while TALLRec [1] and GenRec [15]
+leverage parameter-efficient fine-tuning (e.g., LoRA [12]) to adapt
+LLaMA for recommendation. Further, methods like E4SRec [23] and
+RecInterpreter [50] explore fusing collaborative signals into LLMs
+through architectural modifications such as tokenizer-level align-
+ment and hybrid embedding design. CALRec [24] further adapts
+generative LLMs to sequential recommendation via contrastive
+alignment, improving robustness under sparse interactions. An-
+other promising research direction leverages LLMs to mitigate
+data sparsity issues in recommendation. A-LLMRec [19] proposes a
+model-agnostic framework that aligns collaborative filtering mod-
+els with LLMs by projecting their embeddings into the token space
+of LLMs, achieving robust performance in both cold and warm
+scenarios without additional fine-tuning. In parallel, LLM-ESR [26]
+introduces a dual-view sequential recommendation framework that
+combines frozen LLM-derived semantic embeddings with collabo-
+rative signals, and enhances long-tail user modeling via retrieval-
+augmented self-distillation from semantically similar users. These
+efforts highlight the importance of aligning the semantic knowl-
+edge of LLMs with collaborative signals to exploit their potential
+under sparse interaction scenarios. In this line, FCRLLM introduces
+a unique bidirectional alignment with an energy-based teacher-
+update mechanism to more effectively bridge semantic and collabo-
+rative representations.
+6
+Conclusion
+In this paper, we propose FCRLLM, a novel framework for long-
+tail sequential recommendation that integrates collaborative and
+semantic representations through bidirectional teacher–student
+alignment. By introducing the FlipClass, our model dynamically
+adjusts teacher attention to better reflect student queries, thereby
+maintaining consistency between the semantic and collaborative
+streams. Experimental results on multiple datasets and backbones
+validate that FCRLLM consistently improves performance, offering
+robust gains across both head and tail users and items. For future
+work, we plan to extend FlipClass to other modalities and explore
+its potential in broader recommendation scenarios.
+Acknowledgments
+This work was supported by the Institute of Information & Com-
+munications Technology Planning Evaluation and the National
+Research Foundation of South Korea (IITP-2025-RS-2023-00254129;
+IITP-2025-RS-2024-00346737).
+6581
+WWW‘26，2026年4月13日至17日，阿联酋迪拜
+HeoByungmoon等
+图5：在Beauty数据集上，使用SASRec对细粒度用户和物品组
+进行的性能比较
+(a)ST
+(b)CT
+图6：在Yelp数据集上使用SASRec训练后，ST和CT中学生对
+查询和键嵌入的余弦相似度
+(列)之间的相似度模式。我们观察到结果相似度图中存在显著
+不同的结构模式。这种差异支持了我们的设计目标：ST模块和
+CT模块是独立参数化并训练的，用以反映不同的对齐目标。
+尽管两个模块接收相同的输入，但它们学会了编码不同的交互
+模式。这些互补行为对于我们的集成式架构至关重要，使其能
+够从语义和协同的角度整合非对称信号。
+5相关工作
+5.1序列推荐
+序列推荐（SR）专注于建模用户行为序列以预测下一个项目。
+早期工作，如FPMC [36] 和Fossil [8], 采用马尔可夫链来建模
+项目转换。随着深度学习的发展，SR模型已从基于RNN的
+GRU4Rec [10] 和基于CNN的Caser [43] 演变为基于
+Transformer的SASRec [17] 和BERT4Rec [42]。最近，基于
+MLP的方法[58] 和基于对比学习的方法[49] 在提升性能方面
+显示出潜力。虽然大多数工作专注于增强模型表示复杂用户‑
+项目交互的能力，但较少关注长尾问题。CITIES [14] 为长尾
+项目推断表示，而MELT [18] 则从纯粹协同的角度联合处理长
+尾用户和项目。
+5.2用于推荐的LLM
+大型语言模型展现出强大的语义理解能力，它们在自然语言处
+理领域的成功促使人们不断努力将其应用于推荐任务 [56, 57]。
+早期方法主要探索提示工程和情境学习 [3] 来
+将大型语言模型用于推荐场景。例如，ChatRec [5]将推荐任
+务表述为逐步对话，而DRDT[47] 整合了检索增强的情境来指
+导物品预测。LLMRerank [4] 和UniLLMRec [55] 引入了推
+理式提示（如思维链）来适配重排序或全流程推荐。尽管这些
+方法灵活，但基于提示的方法往往不如专门的推荐模型，主要
+原因是大型语言模型预训练的自然语言目标与推荐目标之间存
+在差距。为了弥合这一差距，近期研究工作聚焦于通过微调来
+对齐大型语言模型与推荐任务。P5 [6] 和InstructRec [53] 在
+特定领域语料库上应用指令微调，而TALLRec [1] 和
+GenRec [15] 利用参数高效的微调（如LoRA [12]）来适配
+LLaMA进行推荐。此外，E4SRec [23] 和RecInterpreter
+[50] 通过架构修改（如分词器级对齐和混合嵌入设计）探索将
+协同信号融合到大型语言模型中。CALRec [24] 通过对比对齐
+将生成式大型语言模型适配于序列推荐，提高了在稀疏交互下
+的鲁棒性。另一条有前景的研究方向是利用大型语言模型缓解
+推荐中的数据稀疏问题。A‑LLMRec [19] 提出了一种模型无关
+的框架，通过将协同过滤模型的嵌入投影到大型语言模型的分
+词空间来对齐它们，在不进行额外微调的情况下在冷启动和热
+启动场景中均取得稳健性能。同时，LLM‑ESR [26]引入了一种
+双视图序列推荐框架，结合冻结的大型语言模型生成的语义嵌
+入与协同信号，并通过从语义相似的用户中检索增强的自蒸馏
+来增强长尾用户建模。这些努力突显了在对齐大型语言模型的
+语义知识与协同信号以利用其在稀疏交互场景下的潜力方面的
+重要性。在这一方向上，FCRLLM引入了一种独特的双向对齐
+机制和基于能量的教师更新机制，以更有效地弥合语义表示与
+协同表示之间的差距。
+6结论
+在本文中，我们提出了FCRLLM，这是一个通过双向师生对齐
+整合协同和语义表示的新型长尾序列推荐框架。通过引入
+FlipClass，我们的模型动态调整教师注意力以更好地反映学
+生查询，从而在语义流和协同流之间保持一致性。在多个数据
+集和骨干网络上的实验结果验证了FCRLLM始终如一地提升了
+性能，在头部和尾部用户及项目上都取得了显著增益。对于未
+来工作，我们计划将FlipClass扩展到其他模态，并探索其在
+更广泛的推荐场景中的潜力。
+致谢
+这项工作得到了韩国信息通信技术规划评估院（IITP）和韩国
+国家研究基金会（IITP‑2025‑RS‑2023‑00254129；
+IITP‑2025‑RS‑2024‑00346737）的支持。
+6581
+
+FCRLLM: Aligning LLM with Collaborative Filtering for Long-tailed Sequential Recommendation
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+References
+[1] Keqin Bao, Jizhi Zhang, Yang Zhang, Wenjie Wang, Fuli Feng, and Xiangnan
+He. 2023. Tallrec: An effective and efficient tuning framework to align large
+language model with recommendation. In Proceedings of the 17th ACM Conference
+on Recommender Systems. 1007–1014.
+[2] George EP Box and R Daniel Meyer. 1986. An analysis for unreplicated fractional
+factorials. Technometrics 28, 1 (1986), 11–18.
+[3] Qingxiu Dong, Lei Li, Damai Dai, Ce Zheng, Zhiyong Wu, Baobao Chang, Xu
+Sun, Jingjing Xu, and Zhifang Sui. 2022. A survey on in-context learning. arXiv
+preprint arXiv:2301.00234 (2022).
+[4] Jingtong Gao, Bo Chen, Xiangyu Zhao, Weiwen Liu, Xiangyang Li, Yichao Wang,
+Zijian Zhang, Wanyu Wang, Yuyang Ye, Shanru Lin, et al. 2024. LLM-enhanced
+Reranking in Recommender Systems. arXiv preprint arXiv:2406.12433 (2024).
+[5] Yunfan Gao, Tao Sheng, Youlin Xiang, Yun Xiong, Haofen Wang, and Jiawei
+Zhang. 2023. Chat-rec: Towards interactive and explainable llms-augmented
+recommender system. arXiv preprint arXiv:2303.14524 (2023).
+[6] Shijie Geng, Shuchang Liu, Zuohui Fu, Yingqiang Ge, and Yongfeng Zhang. 2022.
+Recommendation as language processing (rlp): A unified pretrain, personalized
+prompt & predict paradigm (p5). In Proceedings of the 16th ACM conference on
+recommender systems. 299–315.
+[7] Jesse Harte, Wouter Zorgdrager, Panos Louridas, Asterios Katsifodimos, Diet-
+mar Jannach, and Marios Fragkoulis. 2023. Leveraging large language models
+for sequential recommendation. In Proceedings of the 17th ACM Conference on
+Recommender Systems. 1096–1102.
+[8] Ruining He and Julian McAuley. 2016. Fusing similarity models with markov
+chains for sparse sequential recommendation. In 2016 IEEE 16th international
+conference on data mining (ICDM). IEEE, 191–200.
+[9] Zhankui He, Zhouhang Xie, Rahul Jha, Harald Steck, Dawen Liang, Yesu Feng,
+Bodhisattwa Prasad Majumder, Nathan Kallus, and Julian McAuley. 2023. Large
+language models as zero-shot conversational recommenders. In Proceedings of the
+32nd ACM international conference on information and knowledge management.
+720–730.
+[10] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk.
+2016. Session-based recommendations with recurrent neural networks. In The
+International Conference on Learning Representations.
+[11] Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. 2015. Distilling the knowledge in
+a neural network. arXiv preprint arXiv:1503.02531 (2015).
+[12] Edward J Hu, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu
+Wang, Weizhu Chen, et al. 2021. LoRA: Low-Rank Adaptation of Large Language
+Models. In International Conference on Learning Representations.
+[13] Jun Hu, Wenwen Xia, Xiaolu Zhang, Chilin Fu, Weichang Wu, Zhaoxin Huan,
+Ang Li, Zuoli Tang, and Jun Zhou. 2024. Enhancing Sequential Recommendation
+via LLM-based Semantic Embedding Learning. In Companion Proceedings of the
+ACM on Web Conference 2024. 103–111.
+[14] Seongwon Jang, Hoyeop Lee, Hyunsouk Cho, and Sehee Chung. 2020. Cities:
+Contextual inference of tail-item embeddings for sequential recommendation. In
+2020 IEEE International Conference on Data Mining (ICDM). IEEE, 202–211.
+[15] Jianchao Ji, Zelong Li, Shuyuan Xu, Wenyue Hua, Yingqiang Ge, Juntao Tan, and
+Yongfeng Zhang. 2024. Genrec: Large language model for generative recommen-
+dation. In European Conference on Information Retrieval. Springer, 494–502.
+[16] Juyong Jiang, Yingtao Luo, Jae Boum Kim, Kai Zhang, and Sunghun Kim. 2021.
+Sequential recommendation with bidirectional chronological augmentation of
+transformer. arXiv preprint arXiv:2112.06460 90 (2021).
+[17] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-
+mendation. In 2018 IEEE international conference on data mining (ICDM). IEEE,
+197–206.
+[18] Kibum Kim, Dongmin Hyun, Sukwon Yun, and Chanyoung Park. 2023. MELT:
+Mutual Enhancement of Long-Tailed User and Item for Sequential Recommenda-
+tion. In Proceedings of the 46th international ACM SIGIR conference on Research
+and development in information retrieval. 68–77.
+[19] Sein Kim, Hongseok Kang, Seungyoon Choi, Donghyun Kim, Minchul Yang, and
+Chanyoung Park. 2024. Large language models meet collaborative filtering: An
+efficient all-round llm-based recommender system. In Proceedings of the 30th
+ACM SIGKDD Conference on Knowledge Discovery and Data Mining. 1395–1406.
+[20] Hyeyoung Ko, Suyeon Lee, Yoonseo Park, and Anna Choi. 2022. A survey of
+recommendation systems: recommendation models, techniques, and application
+fields. Electronics 11, 1 (2022), 141.
+[21] Takeshi Kojima, Shixiang Shane Gu, Machel Reid, Yutaka Matsuo, and Yusuke
+Iwasawa. 2022. Large language models are zero-shot reasoners. Advances in
+neural information processing systems 35 (2022), 22199–22213.
+[22] Yehuda Koren, Robert Bell, and Chris Volinsky. 2009. Matrix factorization tech-
+niques for recommender systems. Computer 42, 8 (2009), 30–37.
+[23] Xinhang Li, Chong Chen, Xiangyu Zhao, Yong Zhang, and Chunxiao Xing. 2023.
+E4SRec: An elegant effective efficient extensible solution of large language models
+for sequential recommendation. arXiv preprint arXiv:2312.02443 (2023).
+[24] Yaoyiran Li, Xiang Zhai, Moustafa Alzantot, Keyi Yu, Ivan Vulić, Anna Korhonen,
+and Mohamed Hammad. 2024. Calrec: Contrastive alignment of generative llms
+for sequential recommendation. In Proceedings of the 18th ACM Conference on
+Recommender Systems. 422–432.
+[25] Haonan Lin, Wenbin An, Jiahao Wang, Yan Chen, Feng Tian, Mengmeng Wang,
+QianYing Wang, Guang Dai, and Jingdong Wang. 2024. Flipped classroom: Align-
+ing teacher attention with student in generalized category discovery. Advances
+in Neural Information Processing Systems 37 (2024), 60897–60935.
+[26] Qidong Liu, Xian Wu, Yejing Wang, Zijian Zhang, Feng Tian, Yefeng Zheng, and
+Xiangyu Zhao. 2024. Llm-esr: Large language models enhancement for long-
+tailed sequential recommendation. Advances in Neural Information Processing
+Systems 37 (2024), 26701–26727.
+[27] Qidong Liu, Fan Yan, Xiangyu Zhao, Zhaocheng Du, Huifeng Guo, Ruiming Tang,
+and Feng Tian. 2023. Diffusion augmentation for sequential recommendation.
+In Proceedings of the 32nd ACM International Conference on Information and
+Knowledge Management. 1576–1586.
+[28] Siyi Liu and Yujia Zheng. 2020. Long-tail session-based recommendation. In
+Proceedings of the 14th ACM Conference on Recommender Systems. 509–514.
+[29] Zhiwei Liu, Ziwei Fan, Yu Wang, and Philip S Yu. 2021. Augmenting sequential
+recommendation with pseudo-prior items via reversely pre-training transformer.
+In Proceedings of the 44th international ACM SIGIR conference on Research and
+development in information retrieval. 1608–1612.
+[30] Khushhall Chandra Mahajan, Amey Porobo Dharwadker, Saurabh Gupta, and
+Brad Schumitsch. 2023. VideoRecSys 2023: First Workshop on Large-Scale Video
+Recommender Systems. In Proceedings of the 17th ACM Conference on Recom-
+mender Systems. 1269–1271.
+[31] Julian McAuley, Christopher Targett, Qinfeng Shi, and Anton Van Den Hengel.
+2015. Image-based recommendations on styles and substitutes. In Proceedings
+of the 38th international ACM SIGIR conference on research and development in
+information retrieval. 43–52.
+[32] Jianmo Ni, Gustavo Hernandez Abrego, Noah Constant, Ji Ma, Keith Hall, Daniel
+Cer, and Yinfei Yang. 2022. Sentence-t5: Scalable sentence encoders from pre-
+trained text-to-text models. In Findings of the association for computational lin-
+guistics: ACL 2022. 1864–1874.
+[33] Karl Pearson. 1901. LIII. On lines and planes of closest fit to systems of points in
+space. The London, Edinburgh, and Dublin philosophical magazine and journal of
+science 2, 11 (1901), 559–572.
+[34] Hubert Ramsauer, Bernhard Schäfl, Johannes Lehner, Philipp Seidl, Michael
+Widrich, Thomas Adler, Lukas Gruber, Markus Holzleitner, Milena Pavlović,
+Geir Kjetil Sandve, et al. 2020. Hopfield networks is all you need. arXiv preprint
+arXiv:2008.02217 (2020).
+[35] Xubin Ren, Wei Wei, Lianghao Xia, Lixin Su, Suqi Cheng, Junfeng Wang, Dawei
+Yin, and Chao Huang. 2024. Representation learning with large language mod-
+els for recommendation. In Proceedings of the ACM on Web Conference 2024.
+3464–3475.
+[36] Steffen Rendle, Christoph Freudenthaler, and Lars Schmidt-Thieme. 2010. Factor-
+izing personalized markov chains for next-basket recommendation. In Proceedings
+of the 19th international conference on World wide web. 811–820.
+[37] Adriana Romero, Nicolas Ballas, Samira Ebrahimi Kahou, Antoine Chassang,
+Carlo Gatta, and Yoshua Bengio. 2015.
+FitNets: Hints for Thin Deep Nets.
+arXiv:1412.6550 [cs.LG] https://arxiv.org/abs/1412.6550
+[38] Scott Sanner, Krisztian Balog, Filip Radlinski, Ben Wedin, and Lucas Dixon.
+2023. Large language models are competitive near cold-start recommenders for
+language-and item-based preferences. In Proceedings of the 17th ACM conference
+on recommender systems. 890–896.
+[39] Badrul Sarwar, George Karypis, Joseph Konstan, and John Riedl. 2001. Item-based
+collaborative filtering recommendation algorithms. In Proceedings of the 10th
+international conference on World Wide Web. 285–295.
+[40] Junyuan Shang, Tengfei Ma, Cao Xiao, and Jimeng Sun. 2019. Pre-training of
+graph augmented transformers for medication recommendation. In 28th Interna-
+tional Joint Conference on Artificial Intelligence, IJCAI 2019. International Joint
+Conferences on Artificial Intelligence, 5953–5959.
+[41] Kaitao Song, Xu Tan, Tao Qin, Jianfeng Lu, and Tie-Yan Liu. 2020. Mpnet:
+Masked and permuted pre-training for language understanding. Advances in
+neural information processing systems 33 (2020), 16857–16867.
+[42] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang.
+2019. BERT4Rec: Sequential recommendation with bidirectional encoder rep-
+resentations from transformer. In Proceedings of the 28th ACM international
+conference on information and knowledge management. 1441–1450.
+[43] Jiaxi Tang and Ke Wang. 2018. Personalized top-n sequential recommenda-
+tion via convolutional sequence embedding. In Proceedings of the eleventh ACM
+international conference on web search and data mining. 565–573.
+[44] Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne
+Lachaux, Timothée Lacroix, Baptiste Rozière, Naman Goyal, Eric Hambro, Faisal
+Azhar, Aurelien Rodriguez, Armand Joulin, Edouard Grave, and Guillaume Lam-
+ple. 2023. LLaMA: Open and Efficient Foundation Language Models. arXiv
+preprint arXiv:2302.13971 (2023).
+[45] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones,
+Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. 2017. Attention is all
+you need. Advances in neural information processing systems 30 (2017).
+6582
+FCRLLM：将LLM与协同过滤对齐以实现长尾序列推荐
+WWW'26，2026年4月13日至17日，阿联酋迪拜
+参考文献
+[1] 鲍科勤，张继志，张阳，王文杰，冯福丽，和向楠。2023。Tallrec：
+一个有效且高效的调优框架，用于将大型语言模型与推荐对齐。在ACM推荐系
+统第17次会议论文集。1007–1014。[2] 乔治∙E∙P∙博克斯和R∙丹尼尔∙梅耶。
+1986。未复制分数因子的分析。Technometrics28,1(1986),11–18。[3] 董
+庆秀，李雷，戴大梅，郑策，吴志勇，长宝宝，孙旭，徐晶晶，和隋志方。
+2022。情境学习的综述。arXiv预印本arXiv:2301.00234(2022)。[4] 高景通，
+陈波，赵祥宇，刘伟文，李向阳，王一超，张子健，王万宇，叶宇阳，林山如，
+等。2024。推荐系统中的LLM增强重排序。arXiv预印本arXiv:2406.12433
+(2024)。[5] 高云帆，盛涛，向友林，熊云，王浩帆，和张佳伟。2023。
+Chat‑rec：面向交互式和可解释的llm增强推荐系统。arXiv预印本
+arXiv:2303.14524(2023)。[6] 耿世杰，刘树昌，付作辉，葛英强，和张永峰。
+2022。推荐作为语言处理（rlp）：一个统一的预训练、个性化提示和预测范式
+（p5）。在ACM推荐系统第16次会议论文集。299–315。[7] 哈特Jesse，
+ZorgdragerWouter，LouridasPanos，KatsifodimosAsterios，Jannach
+Diet‑mar，和FragkoulisMarios。2023。利用大型语言模型进行序列推荐。
+在ACM推荐系统第17次会议论文集。1096–1102。[8] 何瑞宁和Julian
+McAuley。2016。融合相似度模型与马尔可夫链进行稀疏序列推荐。在2016
+IEEE第16届国际数据挖掘会议（ICDM）。IEEE，191–200。[9] 何占奎，谢
+周航，JhaRahul，SteckHarald，梁大文，冯叶苏，Majumder
+BodhisattwaPrasad，KallusNathan，和JulianMcAuley。2023。大型语言
+模型作为零样本对话式推荐器。在ACM信息与知识管理第32届国际会议论文集。
+720–730。[10] HidasiBalázs，KaratzoglouAlexandros，BaltrunasLinas，
+和TikkDomonkos。2016。基于会话的推荐与循环神经网络。在Learning
+Representations国际会议。[11] HintonGeoffrey，VinyalsOriol，和Dean
+Jeff。2015。神经网络中的知识蒸馏。arXiv预印本arXiv:1503.02531
+(2015)。[12] HuEdwardJ，WallisPhillip，Allen‑ZhuZeyuan，Li
+Yuanzhi，WangShean，王卢，ChenWeizhu，等。2021。LoRA：大型语言
+模型的低秩适应。在InternationalConferenceonLearning
+Representations。[13] 胡军，夏文文，张晓露，付驰林，吴伟昌，宦赵欣，李
+安，唐作立，和周军。2024。基于LLM的语义嵌入学习增强序列推荐。在
+ACM网络会议2024年附录论文集。103–111。[14] JangSeongwon，Lee
+Hoyeop，ChoHyunsouk，和ChungSehee。2020。Cities：用于序列推荐的
+尾部项嵌入上下文推理。在2020IEEE国际数据挖掘会议（ICDM）。IEEE，
+202–211。[15] JiJianchao，LiZelong，XuShuyuan，华文越，Ge
+Yingqiang，TanJuntao，和张永峰。2024。Genrec：用于生成式推荐的
+LLM。在欧洲信息检索会议。Springer，494–502。[16] 江菊勇，罗英涛，
+KimJaeBoum，张凯，和KimSunghun。2021。双向时间增强Transfor
+mer的序列推荐。arXiv预印本arXiv:2112.0646090(2021)。[17] Kang
+Wang‑Cheng和JulianMcAuley。2018。自注意力序列推荐。在2018IEEE国
+际数据挖掘会议（ICDM）。IEEE，197–206。[18] KimKibum，Hyun
+Dongmin，YunSukwon，和ParkChanyoung。2023。MELT：用于序列推荐
+的长期尾部用户和项目相互增强。在信息检索研究与发展第46届国际ACM会议
+论文集。68–77。[19] KimSein，KangHongseok，ChoiSeungyoon，Kim
+Donghyun，YangMinchul，和ParkChanyoung。2024。大型语言模型与协
+同过滤相遇：一个高效的全能llm推荐系统。在ACM知识发现与数据挖掘第30
+届会议论文集。1395–1406。[20] KoHyeyoung，LeeSuyeon，Park
+Yoonseo，和ChoiAnna。2022。推荐系统的综述：推荐模型、技术和应用领
+域。Electronics11,1(2022)，141。[21] 小岛健，GuShixiangShane，
+ReidMachel，MatsuoYutaka，和IwasawaYusuke。2022。大型语言模型
+是零样本推理者。神经信息处理系统进展35(2022)，22199–22213。[22]
+KorenYehuda，BellRobert，和VolinskyChris。2009。推荐系统的矩阵分
+解技术。计算机42,8(2009)，30–37。[23] LiXinhang，ChenChong，
+ZhaoXiangyu，ZhangYong，和XingChunxiao。2023。E4SRec：用于序列
+推荐的大型语言模型的优雅、有效、高效和可扩展解决方案。arXiv预印本
+arXiv:2312.02443(2023)。[24] 李瑶然，ZhaiXiang，AlzantotMoustafa，
+YuKeyi，VulićIvan，KorhonenAnna，和HammadMohamed。2024。
+Calrec：生成式llm的对比对齐
+用于序列推荐。在ACM推荐系统第18次会议论文集中。422–432.[25]
+HaonanLin,WenbinAn,JiahaoWang,YanChen,FengTian,Mengmeng
+Wang,QianYingWang,GuangDai,和JingdongWang.2024.翻转课堂：在广
+义类别发现中使教师注意力与学生学习对齐。神经信息处理系统进展第37卷（
+2024年），60897–60935.[26] QidongLiu,XianWu,YejingWang,Zijian
+Zhang,FengTian,YefengZheng,和XiangyuZhao.2024.Llm‑esr：用于长尾
+序列推荐的增强大型语言模型。神经信息处理系统进展第37卷（2024年），
+26701–26727.[27] QidongLiu,FanYan,XiangyuZhao,ZhaochengDu,
+HuifengGuo,RuimingTang,和FengTian.2023.用于序列推荐的扩散增强。在
+ACM信息与知识管理第32次会议论文集中。1576–1586.[28] SiyiLiu和Yujia
+Zheng.2020.长尾会话式推荐。在ACM推荐系统第14次会议论文集中。509–
+514.[29] ZhiweiLiu,ZiweiFan,YuWang,和PhilipSYu.2021.通过逆向预训
+练Transformer使用伪先验项增强序列推荐。在ACM信息检索国际会议第44届研究
+与发展论文集中。1608–1612.[30] KhushhallChandraMahajan,AmeyPorobo
+Dharwadker,SaurabhGupta,和BradSchumitsch.2023.VideoRecSys
+2023：大规模视频推荐系统研讨会。在ACM推荐系统第17次会议论文集中。
+1269–1271.[31] JulianMcAuley,ChristopherTargett,QinfengShi,和
+AntonVanDenHengel.2015.基于图像的风格和替代推荐。在ACM信息检索国
+际会议第38届研究与发展论文集中。43–52.[32] JianmoNi,GustavoHernandez
+Abrego,NoahConstant,JiMa,KeithHall,DanielCer,和YinfeiYang.
+2022.Sentence‑t5：从预训练文本到文本模型的可扩展句子编码器。在计算语言
+学协会发现：ACL2022论文集中。1864–1874.[33] KarlPearson.1901.LIII.
+空间中点系统的最近拟合线和面。伦敦、爱丁堡和都柏林哲学杂志和科学杂志第2
+卷，第11期（1901年），559–572.[34] HubertRamsauer,BernhardSchäfl,
+JohannesLehner,PhilippSeidl,MichaelWidrich,ThomasAdler,Lukas
+Gruber,MarkusHolzleitner,MilenaPavlović,GeirKjetilSandve,等.2020.
+Hopfield网络就是你所需要的。arXiv预印本arXiv:2008.02217（2020）。[35]
+XubinRen,WeiWei,LianghaoXia,LixinSu,SuqiCheng,JunfengWang,
+DaweiYin,和ChaoHuang.2024.用于推荐的表示学习大型语言模型。在ACM网
+络会议2024论文集中。3464–3475.[36] SteffenRendle,Christoph
+Freudenthaler,和LarsSchmidt‑Thieme.2010.用于下一篮推荐的个人化马尔可
+夫链分解。在第19届万维网国际会议论文集中。811–820.[37] AdrianaRomero,
+NicolasBallas,SamiraEbrahimiKahou,AntoineChassang,CarloGatta,和
+YoshuaBengio.2015.FitNets：薄深度网络提示。arXiv:
+1412
+6550
+[38]
+6550 [
+]
+1412
+.cs.LG
+https://arxiv.org/abs/.ScottSanner,KrisztianBalog,FilipRadlinski,Ben
+Wedin,和LucasDixon.2023.大型语言模型在基于语言和项目偏好的冷启动推荐
+中具有竞争力。在ACM推荐系统第17次会议论文集中。890–896.[39] Badrul
+Sarwar,GeorgeKarypis,JosephKonstan,和JohnRiedl.2001.基于项目的协
+同过滤推荐算法。在第10届万维网国际会议论文集中。285–295.[40] Junyuan
+Shang,TengfeiMa,CaoXiao,和JimengSun.2019.用于药物推荐的图增强
+Transformer预训练。在第28届国际人工智能联合会议，IJCAI2019论文集中。
+5953–5959.[41] KaitaoSong,XuTan,TaoQin,JianfengLu,和Tie‑YanLiu.
+2020.Mpnet：用于语言理解的掩码和排列预训练。神经信息处理系统进展第33卷
+（2020年），16857–16867.[42] FeiSun,JunLiu,JianWu,ChanghuaPei,
+XiaoLin,WenwuOu,和PengJiang.2019.BERT4Rec：使用Transformer的双
+向编码器表示进行序列推荐。在ACM信息与知识管理第28届国际会议论文集中。
+1441–1450.[43] JiaxiTang和KeWang.2018.通过卷积序列嵌入进行个性化
+Top‑n序列推荐。在第11届ACM网络搜索与数据挖掘国际会议论文集中。565–
+573.[44] HugoTouvron,ThibautLavril,GautierIzacard,XavierMartinet,
+Marie‑AnneLachaux,TimothéeLacroix,BaptisteRozière,NamanGoyal,
+EricHambro,FaisalAzhar,AurelienRodriguez,ArmandJoulin,Edouard
+Grave,和GuillaumeLam‑ple.2023.LLaMA：开放高效的基石语言模型。
+arXiv预印本arXiv:2302.13971（2023）。[45] AshishVaswani,Noam
+Shazeer,NikiParmar,JakobUszkoreit,LlionJones,AidanNGomez,
+ŁukaszKaiser,和IlliaPolosukhin.2017.注意力就是你所需要的。神经信息处理
+系统进展第30卷（2017年）。
+6582
+
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+Byungmoon Heo et al.
+[46] Lei Wang and Ee-Peng Lim. 2023. Zero-shot next-item recommendation using
+large pretrained language models. arXiv preprint arXiv:2304.03153 (2023).
+[47] Yu Wang, Zhiwei Liu, Jianguo Zhang, Weiran Yao, Shelby Heinecke, and Philip S
+Yu. 2023. Drdt: Dynamic reflection with divergent thinking for llm-based sequen-
+tial recommendation. arXiv preprint arXiv:2312.11336 (2023).
+[48] Likang Wu, Zhi Zheng, Zhaopeng Qiu, Hao Wang, Hongchao Gu, Tingjia Shen,
+Chuan Qin, Chen Zhu, Hengshu Zhu, Qi Liu, et al. 2024. A survey on large
+language models for recommendation. World Wide Web 27, 5 (2024), 60.
+[49] Xu Xie, Fei Sun, Zhaoyang Liu, Shiwen Wu, Jinyang Gao, Jiandong Zhang, Bolin
+Ding, and Bin Cui. 2022. Contrastive learning for sequential recommendation. In
+2022 IEEE 38th international conference on data engineering (ICDE). IEEE, 1259–
+1273.
+[50] Zhengyi Yang, Jiancan Wu, Yanchen Luo, Jizhi Zhang, Yancheng Yuan, An Zhang,
+Xiang Wang, and Xiangnan He. 2023. Large language model can interpret latent
+space of sequential recommender. arXiv preprint arXiv:2310.20487 (2023).
+[51] Hongzhi Yin, Bin Cui, Jing Li, Junjie Yao, and Chen Chen. 2012. Challenging the
+long tail recommendation. arXiv preprint arXiv:1205.6700 (2012).
+[52] Jianwen Yin, Chenghao Liu, Weiqing Wang, Jianling Sun, and Steven CH Hoi.
+2020. Learning transferrable parameters for long-tailed sequential user behavior
+modeling. In Proceedings of the 26th ACM SIGKDD International Conference on
+Knowledge Discovery & Data Mining. 359–367.
+[53] Junjie Zhang, Ruobing Xie, Yupeng Hou, Xin Zhao, Leyu Lin, and Ji-Rong Wen.
+2023. Recommendation as instruction following: A large language model em-
+powered recommendation approach. ACM Transactions on Information Systems
+(2023).
+[54] Susan Zhang, Stephen Roller, Naman Goyal, Mikel Artetxe, Moya Chen, Shuohui
+Chen, Christopher Dewan, Mona Diab, Xian Li, Xi Victoria Lin, et al. 2022. Opt:
+Open pre-trained transformer language models. arXiv preprint arXiv:2205.01068
+(2022).
+[55] Wenlin Zhang, Xiangyang Li, Yuhao Wang, Kuicai Dong, Yichao Wang, Xinyi
+Dai, Xiangyu Zhao, Huifeng Guo, Ruiming Tang, et al. 2024. Tired of Plugins?
+Large Language Models Can Be End-To-End Recommenders. arXiv preprint
+arXiv:2404.00702 (2024).
+[56] Wayne Xin Zhao, Kun Zhou, Junyi Li, Tianyi Tang, Xiaolei Wang, Yupeng Hou,
+Yingqian Min, Beichen Zhang, Junjie Zhang, Zican Dong, et al. 2023. A survey
+of large language models. arXiv preprint arXiv:2303.18223 (2023).
+[57] Zihuai Zhao, Wenqi Fan, Jiatong Li, Yunqing Liu, Xiaowei Mei, Yiqi Wang, Zhen
+Wen, Fei Wang, Xiangyu Zhao, Jiliang Tang, et al. 2024. Recommender systems
+in the era of large language models (llms). IEEE Transactions on Knowledge and
+Data Engineering (2024).
+[58] Kun Zhou, Hui Yu, Wayne Xin Zhao, and Ji-Rong Wen. 2022. Filter-enhanced
+MLP is all you need for sequential recommendation. In Proceedings of the ACM
+web conference 2022. 2388–2399.
+A
+Prompt Design
+In Section 3.1, item attributes are transformed into textual prompts,
+which are then used to generate semantic embeddings through a
+text embedding API. These prompts are constructed using prede-
+fined templates that help ensure consistency across items. Figure 7
+presents the templates adapted for each dataset with different at-
+tribute sets. In these templates, boldfaced tokens indicate place-
+holder fields replaced with actual attribute values.
+B
+Experimental Settings
+This section provides additional details regarding the experimental
+setup.
+B.1
+Dataset and Preprocessing
+To validate the proposed method, we conduct comprehensive exper-
+iments on three widely used benchmark datasets: Yelp, Fashion, and
+Beauty. Yelp 1 comprises user check-in records and corresponding
+reviews. In this work, we utilize only the check-in interactions and
+attribute metadata of points of interest. The Amazon dataset 2 [31],
+a large-scale e-commerce corpus containing user reviews across
+1https://www.yelp.com/dataset
+2https://cseweb.ucsd.edu/~jmcauley/datasets.html#amazon_reviews
+The point of interest has the following attributes:
+name is <NAME>; category is <CATEGORY>; type is <TYPE>; open status is <OPEN>;
+review count is <COUNT>; city is <CITY>; average score is <STARS>.
+Item Prompt Template (Yelp)
+The fashion item has the following attributes:
+name is <TITLE>; brand is <BRAND>; date is <DATE>; price is <PRICE>.
+The item has the following features: <FEATURE>.
+The item has the following descriptions: <DESCRIPTION>.
+Item Prompt Template (Fashion)
+The beauty item has the following attributes:
+name is <TITLE>; brand is <BRAND>; price is <PRICE>.
+The item has the following features: <CATEGORIES>.
+The item has the following descriptions: <DESCRIPTION>.
+Item Prompt Template (Beauty)
+Figure 7: Prompt templates used for encoding item attributes
+in each dataset.
+various product domains, from which we employ the Fashion and
+Beauty subsets.
+For data preprocessing, we adopt the strategy proposed in [26].
+Users with fewer than three interactions are excluded, as the cold
+start problem is outside the scope of this study. For data partitioning,
+we follow a standard protocol by assigning the final item in each
+user’s interaction sequence as the test instance and the second-to-
+last item as the validation instance.
+B.2
+Backbone and Baseline
+Backbone Models. To demonstrate the generalizability of our
+framework, we evaluate it on two well-established sequential rec-
+ommendation models.
+• GRU4Rec [10]. It employs gated recurrent units to model user
+behavior sequences, capturing temporal dependencies in implicit
+feedback data. It generates a single user representation from
+the sequence and applies a pairwise ranking loss to optimize
+recommendation accuracy.
+• SASRec [17]. It employs causal self-attention layers to model
+user interaction sequences, effectively capturing both local and
+global dependencies while preserving the temporal order of items.
+To train the model, a sequence-to-sequence pairwise ranking loss
+is used, encouraging higher relevance scores for ground-truth
+items over negative samples.
+Traditional Baselines. These methods first divide users and items
+into head and long-tail groups and then apply targeted training
+strategies to improve the performance of the long-tail group. It is
+important to note that these approaches rely solely on collaborative
+signals without incorporating any semantic information.
+• CITIES [14]. This method proposes an embedding inference
+function specifically aimed at refining the representations of
+long-tail items. The function is trained on head item embeddings
+and applied to long-tail items at inference time.
+6583
+WWW’26，2026年4月13日至17日，阿联酋迪拜
+HeoByungmoon等人
+[46] 王蕾和刘一平。2023。使用大型预训练语言模型进行零样本下一项推荐。
+arXiv预印本arXiv:2304.03153(2023)。[47] 王宇，刘志伟，张建国，姚伟然，
+谢莉∙海因克，和余必胜。2023。Drdt：用于基于llm的序列推荐的动态反思与
+发散思维。arXiv预印本arXiv:2312.11336(2023)。[48] 吴立康，郑智，邱兆
+鹏，王浩，顾洪超，沈庭嘉，秦川，朱晨，朱恒舒，刘奇，等。2024。关于推
+荐大型语言模型的综述。万维网27,5(2024),60。[49] 谢旭，孙飞，刘兆阳，
+吴世文，高金阳，张建东，丁波林，和崔斌。2022。序列推荐的对比学习。在
+2022年IEEE第38届国际数据工程会议(ICDE)。IEEE，1259–1273。[50] 杨
+正谊，吴建灿，罗彦辰，张继志，袁言成，张安，王翔，和何翔南。2023。大
+型语言模型可以解释序列推荐器的潜在空间。arXiv预印本arXiv:2310.20487
+(2023)。[51] 尹红智，崔斌，李静，姚俊杰，和陈晨。2012。挑战长尾推荐。
+arXiv预印本arXiv:1205.6700(2012)。[52] 尹建文，刘成浩，王伟庆，孙建
+玲，和HoiStevenCH。2020。学习可迁移参数用于长尾序列用户行为建模。
+在26thACMSIGKDD国际知识发现与数据挖掘会议论文集。359–367。[53]
+张俊杰，谢若冰，侯宇鹏，赵欣，林雷宇，和温继荣。2023。推荐作为指令遵
+循：一种由大型语言模型赋能的推荐方法。ACM信息系统汇刊(2023)。[54] 张
+舒，StephenRoller，GoyalNaman，ArtetxeMikel，ChenMoya，陈舒慧，
+DewanChristopher，DiabMona，李娴，LinXiVictoria，等。2022。Opt：
+开放预训练Transformer语言模型。arXiv预印本arXiv:2205.01068(2022)。
+[55] 张文林，李向阳，王宇浩，董奎才，王一超，戴新怡，赵祥宇，郭惠风，
+唐瑞明，等。2024。厌倦了插件？大型语言模型可以是端到端推荐器。arXiv
+预印本arXiv:2404.00702(2024)。[56] 赵伟欣，周坤，李俊毅，唐天一，王晓
+蕾，侯宇鹏，闵英倩，张贝辰，张俊杰，董子灿，等
+.2023.大型语言模型综述.arXiv预印本arXiv:2303.18223(2023).[57]
+赵志怀,范文奇,李家通,刘云清,梅晓伟,王一琦,温振,王飞,赵祥宇,唐继良,
+等.2024.大型语言模型（LLM ）时代推荐系统.IEEETransactionson
+KnowledgeandDataEngineering(2024).[58] 周坤,余辉,赵伟宁,温继荣.
+2022.过滤增强的多层感知机足以满足序列推荐.ACMWebConference
+2022会议论文.2388–2399.
+提示设计
+在3.1节中，项目属性被转换为文本提示，然后通过文本嵌入
+API生成语义嵌入。这些提示使用预定义的模板构建，有助于
+确保项目之间的一致性。图7展示了针对不同属性集的每个数
+据集适配的模板。在这些模板中，加粗的标记表示被实际属性
+值替换的占位符字段。
+B.实验设置
+本节提供了有关实验设置的更多详细信息。
+B.1数据集和预处理
+为验证所提方法，我们在三个广泛使用的基准数据集上进行了全面的
+实验：Yelp、Fashion和Beauty。Yelp 1 包含用户签到记录及相应的
+评论。在本工作中，我们仅使用签到交互以及兴趣点的属性元数据。
+亚马逊数据集 2 [31],是一个包含跨多个产品领域用户评论的大规模
+电子商务语料库，从中我们采用了Fashion和Beauty子集。
+1https://www.yelp.com/dataset2https://cseweb.ucsd.edu/~
+jmcauley/datasets.html#amazon_reviews
+兴趣点具有以下属性：
+名称是<NAME>；类别是<CATEGORY>；类型是<TYPE>；开放状态是<OPEN>；
+评价数量是<COUNT>；城市是<CITY>；平均评分是<STARS>。
+商品提示模板（Yelp）
+该时尚商品具有以下属性：名称是<TITLE>；品牌是<BRAND>；日期
+是<DATE>；价格是<PRICE>。该商品具有以下特点：<FEATURE>。
+该商品具有以下描述：<DESCRIPTION>。
+商品提示模板（时尚）
+该美妆商品具有以下属性：名称是<TITLE>；品牌是<
+BRAND>；价格是<PRICE>。该商品具有以下特点：<
+CATEGORIES>。该商品具有以下描述：<DESCRIPTION>。
+商品提示模板（美妆）
+图7：用于编码每个数据集中物品属性的提示模板。
+不同产品领域，从中我们采用了时尚和美妆子集。
+在数据预处理阶段，我们采用[26]中提出的方法。排除交
+互次数少于三次的用户，因为冷启动问题超出了本研究范围。
+对于数据划分，我们遵循标准协议：将每个用户交互序列中的
+最后一个物品作为测试样本，倒数第二个物品作为验证样本。
+B.2主干与基线
+主干模型。为了验证我们框架的泛化能力，我们在两个成熟的
+序列推荐模型上进行了评估。
+• GRU4Rec [10]。它采用门控循环单元来建模用户行为序列，
+捕捉隐式反馈数据中的时序依赖关系。它从序列中生成单个用
+户表示，并应用成对排序损失来优化推荐准确率。
+• SASRec [17].
+它采用因果自注意力层来建模用户交互序列，有效捕捉
+局部和全局依赖关系，同时保留物品的时间顺序。为了训练
+模型，使用序列到序列的成对排序损失，鼓励真实物品比负
+样本获得更高的相关性分数。
+传统基线方法。这些方法首先将用户和物品分为头部和长尾组，
+然后对长尾组应用有针对性的训练策略以提高其性能。重要的
+是要注意这些方法完全依赖于协同信号，而没有包含任何语义
+信息。
+• 城市 [14]。该方法提出了一种嵌入推理函数，专门用于优
+化长尾物品的表示。该函数基于头部物品嵌入进行训练，并
+在推理时应用于长尾物品。
+6583
+
+FCRLLM: Aligning LLM with Collaborative Filtering for Long-tailed Sequential Recommendation
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+Table 4: Best hyperparameters of FCRLLM on all datasets.
+Dataset
+Backbone
+𝛼
+𝛽
+𝛾𝑢𝑝𝑑𝑎𝑡𝑒
+𝛾𝑓𝑐
+Yelp
+GRU4Rec
+0.3
+0.5
+0.3
+1
+SASRec
+0.3
+0.5
+0.7
+0.1
+Fashion
+GRU4Rec
+0.3
+0.7
+0.5
+0.5
+SASRec
+0.7
+0.7
+0.3
+0.5
+Beauty
+GRU4Rec
+0.3
+0.3
+0.3
+0.5
+SASRec
+0.5
+0.3
+0.7
+1
+• MELT [18]. It introduces a bilateral branch architecture to ad-
+dress the representation gap for long-tail users and items. One
+branch learns head user representations and transfers them to
+tail users during inference. The other reconstructs head item
+embeddings during training and updates those of tail items at
+inference time.
+LLM-based Baselines. These methods are designed to incorpo-
+rate semantic representations generated by LLMs to improve the
+performance of recommender systems.
+• RLMRec [35]. This method represents one of the earliest at-
+tempts to leverage semantic embeddings produced by LLMs. Al-
+though it was originally designed for collaborative filtering, we
+adapt it to sequential recommendation by removing the profile
+generation process.
+• LLMInit [7, 13]. Following the setup introduced in [26], we adopt
+the approach of initializing item embeddings with LLM-derived
+representations, as employed in LLM2Bert4Rec [7] and SAID [13].
+We refer to this approach as LLMInit.
+• LLM-ESR [26]. It is a dual-view sequential recommendation
+framework that integrates semantic information derived from
+LLMs with collaborative signals. A dual-branch architecture
+models both semantic and collaborative user representations,
+optimized jointly via a combination of ranking loss and self-
+distillation loss.
+B.3
+Implementation Details
+We conduct experiments on an AMD EPYC 7763 platform equipped
+with an NVIDIA A100 GPU with 40GB of memory. The model
+is implemented using Python 3.10.12 and PyTorch 2.5.0. For all
+datasets, the maximum sequence length is fixed at 200, and the
+embedding dimension is set to 64. During training, we use a batch
+size of 128 and a learning rate of 0.001. The model is optimized
+using the Adam optimizer. Regarding hyperparameters, 𝛼, 𝛽, and
+𝛾update are selected from {0.3, 0.5, 0.7}, while 𝛾fc is searched from
+{0.1, 0.5, 1.0}. It is worth noting that FlipClass uses only a single
+attention layer. The backbone configuration includes one GRU layer
+for GRU4Rec and two self-attention layers for SASRec. Lastly, the
+semantic embeddings from LLMs are derived from the API model,
+namely text-embedding-ada-0023. For reproducibility, we introduce
+the best hyperparameter configurations for each dataset in Table 4.
+3https://platform.openai.com/docs/guides/embeddings
+Figure 8: Performance comparison of the proposed FCRLLM
+and baselines across fine-grained user and item groups on
+the Beauty dataset using the GRU4Rec backbone.
+C
+More Experimental Results
+C.1
+Group Analysis
+For further analysis, we investigate how effectively the proposed
+FCRLLM mitigates the long-tail problem by dividing users and
+items into five groups based on sequence length and item popu-
+larity, respectively. The group-wise performance with GRU4Rec
+as the backbone is presented in Figure 8. In the user group anal-
+ysis, all models exhibit lower performance for users with fewer
+interactions (e.g., groups 1–4 and 5–9), highlighting the challenges
+posed by long-tail user distributions. Among them, FCRLLM con-
+sistently achieves the best performance across all user groups, with
+particularly notable improvements in long-tail segments. These
+results suggest that our FlipClass enhances representation learning
+under data sparsity by effectively leveraging semantic information
+from LLMs to complement collaborative signals. In the item group
+analysis, GRU4Rec demonstrates relatively strong performance in
+head item groups, such as 40–89, 90–159, and ≥160, but shows a
+significant performance drop in the long-tail item group 1–9. This
+reflects the structural nature of CF models, which benefit from
+frequent parameter updates for popular items while struggling to
+learn reliable representations for infrequent ones due to limited
+interaction data. Consequently, GRU4Rec tends to perform well on
+head items but remains vulnerable to long-tail items. In contrast,
+FCRLLM achieves substantial gains in the long-tail item groups
+1–9 and 10–39, outperforming both LLMInit and LLM-ESR, while
+maintaining competitive performance in the head item groups. This
+indicates that FCRLLM generalizes well even to infrequent items
+and mitigates the head–tail trade-off commonly observed in other
+models, thereby achieving balanced performance across the entire
+popularity spectrum. Overall, these results demonstrate that FCR-
+LLM effectively mitigates both long-tail user and item challenges,
+while simultaneously preserving strong performance for popular
+cases, thereby improving the overall recommendation accuracy.
+C.2
+Comparison with Alternative Alignment
+Methods
+We additionally compare our FlipClass module with two represen-
+tative alignment approaches: Cosine similarity and KL-divergence.
+These methods are widely used in representation learning as strate-
+gies for measuring agreement between two views, and thus serve
+as natural baselines for teacher-student interaction. As shown in
+6584
+FCRLLM：将LLM与协同过滤对齐以用于长尾序列推荐
+WWW'26，2026年4月13日至17日，迪拜，阿拉伯联合酋长国
+表4：FCRLLM在所有数据集上的最佳超参数
+数据集
+骨干网络
+𝛼
+𝛽
+𝛾𝑢𝑝𝑑𝑎𝑡𝑒
+𝛾𝑓𝑐
+Yelp
+GRU4Rec
+0.3
+0.5
+0.3
+1
+SASRec
+0.3
+0.5
+0.7
+0.1
+时尚
+GRU4Rec
+0.3
+0.7
+0.5
+0.5
+SASRec
+0.7
+0.7
+0.3
+0.5
+美
+GRU4Rec
+0.3
+0.3
+0.3
+0.5
+SASRec
+0.5
+0.3
+0.7
+1
+• MELT [18]。它引入了一种双边分支架构，用于解决长尾用
+户和物品的表示差距问题。一个分支学习头部用户表示，并在
+推理时将它们迁移到尾部用户。另一个分支在训练期间重建头
+部物品嵌入，并在推理时更新尾部物品的嵌入。
+基于LLM的基线方法。这些方法旨在结合由LLM生成的语义表
+示来提升推荐系统的性能。
+• RLMRec [35]。该方法代表了利用LLM生成的语义嵌入的早
+期尝试之一。尽管它最初是为协同过滤设计的，但通过移除用
+户画像生成过程，我们将其应用于序列推荐。
+• LLM初始化 [7, 13].
+遵循[26],中引入的设置，我们采用使用LLM派生表示初
+始化物品嵌入的方法，正如LLM2Bert4Rec [7] 和SAID [13]
+中所采用的那样。我们将这种方法称为LLMInit。
+• LLM‑ESR [26]。它是一个双视图序列推荐框架，将来自
+LLM的语义信息与协同信号相结合。双分支架构对语义和协同
+用户表示进行建模，并通过组合排序损失和自蒸馏损失进行联
+合优化。
+B.3实现细节
+我们在配备40GB显存的AMDEPYC7763平台上使用
+NVIDIAA100GPU进行实验。模型使用Python3.10.12和
+PyTorch2.5.0实现。对于所有数据集，最大序列长度固定为
+200，嵌入维度设置为64。训练过程中，我们使用128的批处
+理大小和0.001的学习率。模型使用Adam优化器进行优化。
+关于超参数，𝛼、𝛽和𝛾从{0.3,0.5,0.7}中选择，而𝛾fc从
+{0.1,0.5,1.0}中搜索。值得注意的是，FlipClass仅使用单个
+注意力层。骨干配置包括一个用于GRU4Rec的GRU层和两个
+自注意力层用于SASRec。最后，来自LLM的语义嵌入来自
+API模型，即text‑embedding‑ada‑0023。为了可复现性，我们
+在表4中引入了每个数据集的最佳超参数配置。
+3https://platform.openai.com/docs/guides/embeddings
+图8：在Beauty数据集上，使用GRU4Rec主干网络，对比提
+出的FCRLLM与基线模型在细粒度用户和物品组上的性能表现。
+C更多实验结果
+C.1组分析
+为了进一步分析，我们通过根据序列长度和物品流行度将用户
+和物品分为五个组，分别研究所提出的FCRLLM有效缓解长
+尾问题的程度。以GRU4Rec作为骨干的组性能在图8中呈
+现。在用户组分析中，所有模型对于交互较少的用户（例如，
+组1–4和5–9）表现较低，突显了长尾用户分布带来的挑战。
+其中，FCRLLM在所有用户组中始终表现最佳，特别是在长尾
+段有显著改进。这些结果表明，我们的FlipClass通过有效利
+用来自LLM的语义信息来补充协同信号，增强了数据稀疏情
+况下的表示学习。在物品组分析中，GRU4Rec在头部物品组
+（如40–89、90–159和 ≥160）中表现相对较强，但在长尾
+物品组1–9中性能显著下降。这反映了CF模型的结构性质，
+它们受益于频繁的参数更新以处理流行物品，但由于交互数据
+有限，难以学习不频繁物品的可靠表示。因此，GRU4Rec在
+头部物品上表现良好，但对长尾物品仍然脆弱。相比之下，
+FCRLLM在长尾物品组1–9和10–39中取得了巨大进步，优
+于LLMInit和LLM‑ESR，同时在头部物品组中保持有竞争力
+的性能。这表明FCRLLM即使对于不频繁物品也能很好地泛
+化，并缓解其他模型中常见的头尾权衡问题，从而在整个流行
+度范围内实现均衡性能。总体而言，这些结果表明FCRLLM
+有效缓解了长尾用户和物品的挑战，同时在流行情况下保持强
+劲性能，从而提高了整体推荐准确率。
+C.2与其他对齐方法的对比
+此外，我们将我们的FlipClass模块与两种具有代表性的对齐
+方法进行比较：余弦相似度和KL散度。这些方法在表示学习
+中被广泛用作衡量两个视图之间一致性的策略，因此可作为教
+师‑学生交互的自然基线。如所示
+6584
+
+WWW ’26, April 13–17, 2026, Dubai, United Arab Emirates
+Byungmoon Heo et al.
+Table 5: Comparison of alignment methods on the Beauty
+dataset with the SASRec backbone.
+Model
+Overall
+Tail Item
+Head Item
+Tail User
+Head User
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+Cosine
+0.5716
+0.3892
+0.2306
+0.1280
+0.6528
+0.4515
+0.5606
+0.3811
+0.6217
+0.4261
+KL
+0.5720
+0.3740
+0.2344
+0.1243
+0.6526
+0.4335
+0.5627
+0.3670
+0.6147
+0.4058
+FlipClass
+0.5997
+0.4098
+0.2467
+0.1350
+0.6838
+0.4753
+0.5885
+0.4023
+0.6508
+0.4442
+Table 5, our energy-based FlipClass consistently outperforms these
+alternatives. This demonstrates that our FlipClass provides a more
+effective alignment mechanism, leading to superior performance
+in practice.
+C.3
+Comparison of Semantic Embedding
+Models
+In our main experiments, we use text-embedding-ada-002 to ob-
+tain semantic item representations. Since the semantic stream in
+FCRLLM is built upon a frozen text embedding model, the choice
+of the embedding model can affect overall performance. To assess
+the sensitivity of FCRLLM to this choice and to understand po-
+tential performance variations as embedding models evolve, we
+conduct an additional comparative study by replacing the semantic
+embedding model while keeping the rest of the pipeline unchanged.
+Specifically, we compare text-embedding-ada-002 (Ada) with
+two widely used sentence embedding models, sentence-t5 (T5) [32]
+and all-mpnet-base-v2 (Mpnet) [41].
+As shown in Table 6, text-embedding-ada-002 achieves the
+best performance consistently across overall, head/tail items, and
+head/tail users.
+Table 6: Comparison of different semantic embedding models
+used in the semantic representation stream on the Beauty
+dataset with the SASRec backbone.
+Model
+Overall
+Tail Item
+Head Item
+Tail User
+Head User
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+T5
+0.5631
+0.3953
+0.1977
+0.1127
+0.6502
+0.4503
+0.5515
+0.3766
+0.6158
+0.4252
+Mpnet
+0.5767
+0.4000
+0.2275
+0.1340
+0.6600
+0.4635
+0.5668
+0.3923
+0.6220
+0.4335
+Ada
+0.5997
+0.4098
+0.2467
+0.1350
+0.6838
+0.4753
+0.5885
+0.4023
+0.6508
+0.4442
+6585
+WWW’26，2026年4月13日至17日，阿联酋迪拜
+HeoByungmoon等人
+表5：在Beauty数据集上与SASRec主干网络对齐方法的比较
+模型
+总体
+尾项
+头部项目
+尾部用户
+头部用户
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+余弦
+0.5716
+0.3892
+0.2306
+0.1280
+0.6528
+0.4515
+0.5606
+0.3811
+0.6217
+0.4261
+KL
+0.5720
+0.3740
+0.2344
+0.1243
+0.6526
+0.4335
+0.5627
+0.3670
+0.6147
+0.4058
+翻转类别
+0.59970.4098
+0.24670.13500.68380.4753
+0.58850.40230.65080.4442
+表5显示，我们的基于能量的FlipClass始终优于这些替代
+方案。这表明我们的FlipClass提供了一种更有效的对齐机制，
+从而在实际中取得了更优异的性能。
+C.3语义嵌入模型的比较
+在我们的主要实验中，我们使用text‑embedding‑ada‑002来获取语
+义物品表示。由于FCRLLM中的语义流是基于一个冻结的文本嵌入
+模型构建的，因此嵌入模型的选择会影响整体性能。为了评估
+FCRLLM对此选择敏感性，并了解嵌入模型演变时潜在的性能变
+化，我们进行了一项额外的比较研究，通过替换语义嵌入模型，
+同时保持管道的其他部分不变。具体来说，我们比较
+text‑embedding‑ada‑002(Ada)与两个广泛使用的句子嵌入模型，
+sentence‑t5(T5) [32] 和all‑mpnet‑base‑v2(Mpnet) [41]。
+如表6所示，text‑embedding‑ada‑002在整体、头部/尾
+部项目以及头部/尾部用户方面始终表现最佳。
+表6：在Beauty数据集上，使用SASRec主干网络的语义表示
+流中不同语义嵌入模型比较。
+模型
+总体
+尾部项
+头部项
+尾部用户
+头部用户
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+H@10
+N@10
+T5
+0.5631
+0.3953
+0.1977
+0.1127
+0.6502
+0.4503
+0.5515
+0.3766
+0.6158
+0.4252
+Mpnet
+0.5767
+0.4000
+0.2275
+0.1340
+0.6600
+0.4635
+0.5668
+0.3923
+0.6220
+0.4335
+Ada
+0.59970.40980.24670.13500.68380.47530.58850.40230.65080.4442
+6585

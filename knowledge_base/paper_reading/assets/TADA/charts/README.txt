@@ -1,0 +1,13 @@
+Charts generated from the numeric tables in knowledge_base/paper_reading/TADA - 通过尾部感知序列增强改善长尾推荐.md and the cited TADA paper tables.
+ablation_sports_fmlprec_seed1314.png
+ablation_sports_fmlprec_seed2025.png
+ablation_sports_gru4rec.png
+paper_extended_backbones_h10.png
+paper_main_overall_tail_h10.png
+paper_tail_coverage.png
+paper_training_time.png
+paper_yelp_douyin_h10.png
+parameter_ab_heatmap.png
+parameter_alpha_lines.png
+reproduction_beauty_seeds.png
+reproduction_id1_id3.png

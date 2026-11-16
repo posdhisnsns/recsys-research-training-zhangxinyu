@@ -1,0 +1,1163 @@
+Residual Dominance as a Structural Account of
+Last-Item Reliance in Causal Self-Attention Recommenders
+Keito Kozaki
+Hokkaido University
+Sapporo, Hokkaido, Japan
+kozaki@lmd.ist.hokudai.ac.jp
+Keigo Sakurai
+Hokkaido University
+Sapporo, Hokkaido, Japan
+sakurai@lmd.ist.hokudai.ac.jp
+Ren Togo
+Hokkaido University
+Sapporo, Hokkaido, Japan
+togo@lmd.ist.hokudai.ac.jp
+Takahiro Ogawa
+Hokkaido University
+Sapporo, Hokkaido, Japan
+ogawa@lmd.ist.hokudai.ac.jp
+Miki Haseyama
+Hokkaido University
+Sapporo, Hokkaido, Japan
+mhaseyama@lmd.ist.hokudai.ac.jp
+Abstract
+Transformer-based sequential recommenders with causal self-attention
+often rely heavily on the most recent interaction at inference time,
+but how this behavior is structurally expressed in the representation
+used for prediction remains unclear. We combine prediction-time
+diagnostics with norm-based analysis of the full attention block.
+First, we show that SASRec-style models exhibit highly localized
+last-item reliance. We then find that, although self-attention ag-
+gregates contextual information, residual addition sharply shifts
+the full-block representation toward same-position contributions,
+which we term residual dominance. To probe this interpretation,
+we use inference-time residual scaling as a controlled diagnostic
+intervention. Changing the residual strength induces a monotonic
+trade-off between structural mixing and last-item reliance, while
+reducing residual strength recovers a subset of final-position misses
+for which representations at non-final positions already rank the
+ground-truth item correctly. Our results provide a structural ac-
+count linking extreme last-item reliance to residual dominance at
+inference time. The code is publicly available.1
+CCS Concepts
+• Information systems →Recommender systems.
+Keywords
+Sequential Recommendation; Causal Self-Attention; Last-Item Re-
+liance
+ACM Reference Format:
+Keito Kozaki, Keigo Sakurai, Ren Togo, Takahiro Ogawa, and Miki Haseyama.
+2026. Residual Dominance as a Structural Account of Last-Item Reliance in
+Causal Self-Attention Recommenders. In 20th ACM Conference on Recom-
+mender Systems (RecSys ’26), September 27-October 02, 2026, Minneapolis, MN,
+USA. ACM, New York, NY, USA, 10 pages. https://doi.org/10.1145/3773078.
+3831798
+1https://github.com/keito0329/Residual
+This work is licensed under a Creative Commons Attribution 4.0 International License.
+RecSys ’26, Minneapolis, MN, USA
+© 2026 Copyright held by the owner/author(s).
+ACM ISBN 979-8-4007-2284-4/2026/09
+https://doi.org/10.1145/3773078.3831798
+1
+Introduction
+Sequential recommendation predicts [4, 24, 37] a user’s next inter-
+action from an ordered sequence of past interactions. Among many
+approaches [10, 28, 33, 44], Transformer [36]-based models with
+causal self-attention [31, 39], exemplified by SASRec [12], have
+become a dominant paradigm due to their strong empirical perfor-
+mance [13, 17]. These models typically generate recommendations
+from the final-position representation, implicitly assuming that it
+aggregates useful signals from the full interaction history. In this
+work, we revisit this assumption at inference time: how is informa-
+tion from different positions actually expressed in the representation
+used for prediction? Importantly, our goal is not to determine why a
+dataset or training process makes the last item predictive, but to ex-
+amine how a trained causal self-attention recommender structurally
+expresses last-item reliance at inference time.
+Recent studies [23, 40] suggest that causal self-attention rec-
+ommenders often exhibit highly localized inference-time behavior,
+where predictions are strongly anchored to the most recent interac-
+tion. As illustrated in Figure 1, preserving only the last item while
+perturbing earlier positions causes only minor changes, whereas
+also perturbing the final position leads to a sharp degradation. Com-
+plementary ranking diagnostics [23] show that causal self-attention
+models frequently rank the last interacted item first, while doing so
+far less often for immediately preceding items. Although these di-
+agnostics capture different aspects of model behavior, together they
+indicate a discontinuous privilege of the final position. While this
+behavior is consistent with the intuition that recent interactions are
+often informative, its extreme localization remains insufficiently
+explained.
+If positional influence were determined mainly by attention
+weights, one might expect a gradual decay from the final position
+to nearby preceding positions [38]. Instead, we observe a discon-
+tinuous pattern: predictive influence collapses onto the final item,
+while immediately preceding positions contribute little. Prior ex-
+planations based on recency bias or attention patterns therefore
+remain largely descriptive and do not fully account for how learned
+signals are actually utilized at prediction time [38, 40]. This sug-
+gests that components beyond attention weights play an important
+role in shaping inference behavior.
+To study this question, we analyze the full attention block, in-
+cluding residual connections and normalization, using norm-based
+arXiv:2608.14021v1  [cs.AI]  14 Aug 2026
+
+RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA
+Kozaki et al.
+Figure 1: Impact of sequence ordering at inference time. Empty bars: chronologically ordered sequences; light diagonal hatch
+patterns: partial shuffle where only the final position 𝑣𝑡is kept fixed and the remaining items are permuted; heavy diagonal
+hatch patterns: full shuffle where all positions, including 𝑣𝑡, are permuted. Key takeaway: on the sparse and dense datasets,
+preserving only 𝑣𝑡causes a substantially smaller change in SASRec’s performance than full shuffling, indicating a discontinuous
+last-position privilege; this contrast is weak on the non-sequential dataset.
+decomposition [15, 16]. Our results show that, although the atten-
+tion output aggregates contextual information, adding the residual
+pathway sharply reduces the relative contribution of preceding po-
+sitions and strongly preserves same-position information. Because
+SASRec forms its prediction from the final-position representation,
+this self-information-retention structure provides a direct pathway
+through which the most recent item can dominate the prediction
+representation. We refer to this structural tendency as residual dom-
+inance. We do not interpret residual dominance as the sole origin of
+last-item reliance, but as an important inference-time mechanism
+through which learned last-item reliance is expressed.
+To probe this interpretation, we employ inference-time residual
+scaling as a controlled diagnostic intervention. Residual scaling
+provides a one-dimensional modification of the residual contribu-
+tion while keeping the trained parameters fixed, allowing us to
+examine whether representation structure and prediction behav-
+ior vary systematically with residual strength without retraining.
+This intervention is intended as a mechanistic sensitivity probe
+rather than strict causal identification or a new recommendation
+method. Our results show that reducing residual strength weakens
+the direct preservation of the final-position input, while recovering
+a subset of previously missed predictions for which representations
+at non-final positions already rank the ground-truth item correctly
+under standard inference. These findings suggest that prediction
+errors can depend not only on what information is encoded, but
+also on how that information is expressed at inference time.
+Overall, we provide a structural account of how residual domi-
+nance is associated with last-item reliance and use residual scaling
+to probe prediction-time information utilization.
+In summary, the contributions of this work are as follows:
+• We systematically characterize last-item reliance in causal se-
+quential recommenders using complementary prediction-time
+diagnostics across diverse datasets.
+• We analyze the complete attention block and show that the resid-
+ual pathway sharply reduces contextual mixing while preserv-
+ing same-position information, providing a structural account
+of how the final item can dominate the representation used for
+prediction.
+• We use inference-time residual scaling as a controlled diagnostic
+probe and show that residual strength is systematically associ-
+ated with last-item reliance, contextual mixing, and the recovery
+of final-position misses with correct non-final predictions.
+2
+Preliminaries and Overall Setup
+This section defines the task notation and summarizes the datasets,
+baselines, and evaluation protocol. Unless otherwise specified, the
+settings described here are applied to all experiments and diagnos-
+tics in Sections 3–5.
+2.1
+Preliminaries
+Consider a user set U = {𝑢1,𝑢2, . . . ,𝑢|U|} and an item set V =
+{𝑣1, 𝑣2, . . . , 𝑣|V|}. For a user 𝑢, we denote the chronological interac-
+tion sequence as 𝑆𝑢= (𝑣1, 𝑣2, . . . , 𝑣𝑡), where 𝑡= |𝑆𝑢| and 𝑣𝑡is the
+most recent item. The next-item prediction task is to estimate a
+probability distribution over V for the next item 𝑣𝑡+1:
+𝑝(𝑣𝑡+1 = 𝑣| 𝑆𝑢; Θ),
+𝑣∈V,
+(1)
+where Θ represents the model parameters. Throughout the remain-
+der of the paper, we denote the final position by 𝐿(i.e., 𝐿= 𝑡), and
+refer to preceding positions as 𝐿−1, 𝐿−2, etc., when discussing
+position-wise diagnostics.
+2.2
+Overall Setup
+2.2.1
+Datasets. We conduct our analysis on nine publicly avail-
+able datasets that are widely used in sequential recommendation
+research and collectively cover a broad range of domains, sparsity
+levels, sequence lengths, and temporal characteristics.
+
+Residual Dominance as a Structural Account of
+Last-Item Reliance in Causal Self-Attention Recommenders
+RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA
+Table 1: Statistics of the processed datasets after 𝑝-core filter-
+ing (𝑝= 5) and consecutive-repeat removal.
+Dataset
+#Users
+#Items
+#Interact.
+Avg. Len.
+Density
+#Days
+Beauty
+22,363
+12,101
+198,502
+8.9
+0.07%
+4,424
+Sports
+35,598
+18,357
+296,337
+8.3
+0.05%
+4,521
+Video
+24,303
+10,672
+231,780
+9.5
+0.09%
+5,395
+Diginetica
+61,279
+25,593
+485,903
+7.9
+0.03%
+152
+Toys
+19,412
+11,924
+167,597
+8.6
+0.07%
+5,108
+Steam
+281,349
+11,961
+3,550,272
+12.6
+0.11%
+2,639
+BeerAdvocate
+14,635
+22,074
+1,475,412
+100.8
+0.46%
+5,620
+ML-1M
+6,040
+3,416
+999,611
+165.5
+4.84%
+1,038
+Zvuk
+19,267
+150,206
+8,087,953
+419.8
+0.28%
+91
+As summarized in Table 1, these datasets vary in scale and struc-
+ture, spanning both short session-based interactions and long-term
+user histories. All interactions are treated as implicit feedback, fol-
+lowing the standard next-item prediction setting [13, 35].
+Importantly, the datasets used in this study are deliberately cho-
+sen to reflect different degrees of sequential structure discussed in
+recent literature [14]. Specifically, our benchmark includes datasets
+that are widely regarded as exhibiting clear sequential dependen-
+cies and being well suited for sequential recommendation, such as
+the Amazon Beauty, Sports, and Zvuk datasets, as well as datasets
+for which prior work [14] has reported weaker or more limited
+sequential structure, including Diginetica and Steam. By covering
+datasets with substantially different degrees of inherent sequen-
+tiality, our experimental setting enables us to examine whether
+prediction-time information utilization, and in particular last-item
+reliance, consistently emerges across datasets, rather than being an
+artifact of a specific dataset choice.
+To ensure data quality and comparability across datasets, we
+apply 5-core filtering [5, 29, 34]. In addition, consecutive repeated
+items within user sequences are removed [9], as such repetitions
+do not convey additional sequential dependency information and
+may artificially inflate recency effects.
+2.2.2
+Baseline Models. We consider three representative baseline
+models for sequential recommendation: GRU4Rec, SASRec, and
+BERT4Rec. These models are widely used benchmarks and rep-
+resent three distinct modeling paradigms. These three models, as
+employed in analytical studies such as [1, 13], generate predictions
+from a single sequence-level representation. This shared prediction
+interface allows us to directly compare their prediction-time behav-
+iors across different inductive biases. In addition to these standard
+baselines, we incorporate two models to extend our analysis:
+• SASRec [12] represents causal self-attention–based Transform-
+ers, in which next-item prediction relies on the final-position
+representation under a strictly autoregressive information flow.
+• GRU4Rec [10] represents recurrent architectures, where user
+preferences are incrementally aggregated through sequential
+hidden-state transitions.
+• BERT4Rec [33] represents bidirectional self-attention–based
+Transformers, which leverage both past and future context through
+an item-masking objective. At inference time, we predict by
+masking the target position.
+• DuoRec [26] is a representative model that builds upon SASRec
+by incorporating a contrastive learning loss. We utilize this model
+to analyze how modifications to the loss function affect the
+model’s dependency on the final item.
+• BSARec [31] is a recently proposed model that, while utilizing
+a self-attention mechanism similar to SASRec, operates within
+the frequency domain.
+Implementation details of each model and the training environ-
+ment are provided in our repository.
+2.2.3
+Evaluation Metrics. Following [6], we evaluate all models
+under a Global Time Split (GTS) protocol and report NDCG@K and
+HR@K on the test set; we set 𝐾= 10. Prior work has shown that
+leave-one-out evaluation allows future interactions to be included
+in the training set, resulting in temporal information leakage and
+overly optimistic performance estimates [6, 9, 32]. To avoid this
+issue, we adopt a GTS protocol, which strictly separates training and
+testing interactions in time. Specifically, we employ the GTS-Last
+target strategy together with a GT-based validation split, where the
+training and validation sets jointly account for 90% of the data and
+the remaining portion is reserved for testing.
+Finally, we report results using full-catalog ranking, in which
+each model ranks the ground-truth item against the entire item set.
+This choice avoids sampling-based metrics, which have been shown
+to yield inconsistent results and potentially misleading model com-
+parisons [3, 9, 18]. To ensure a fair evaluation of next-item pre-
+diction, we exclude previously interacted items from the top-K
+recommendation lists (i.e., filter-seen) [11]. However, we bypass
+this filtering process for Diginetica and Zvuk, as repeat consump-
+tion is a characteristic feature of user behavior in these specific
+datasets [14].
+3
+Empirical Characterization of Last-Item
+Reliance
+In this section, we empirically characterize the inference-time be-
+havior of SASRec [12], with a particular focus on its tendency to
+rely on the last item in the input sequence. Using a diverse set of
+datasets, we characterize the structure of inference-time behav-
+ior through two complementary diagnostic tools: inference-time
+position shuffling and a recency-localized hit-rate metric.
+3.1
+Inference-Time Position Shuffling
+We first verify position sensitivity via controlled input perturba-
+tions, which serve as a counterfactual probe of positional influence.
+Specifically, given an interaction sequence, we construct variants
+where (i) only the final item is preserved while earlier positions
+are randomly permuted, and (ii) the entire sequence is permuted.
+Comparing prediction performance across these variants isolates
+the effect of the final position.
+Observations. Figure 1 illustrates representative results for sparse,
+dense, and weakly sequential datasets. Across the complete nine-
+dataset results, SASRec exhibits three distinct behavioral regimes
+characterized by data density and sequentiality.
+On sparse datasets, SASRec is largely insensitive to partial shuf-
+fling but shows a sharp performance drop under full shuffling. This
+indicates that the final item contains useful signals and that SAS-
+Rec’s predictions are heavily dependent on it. On denser datasets
+such as ML-1M, while partial shuffling leads to a moderate decrease
+
+RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA
+Kozaki et al.
+Figure 2: HRLI@1 and HRL2I@1 across models and datasets (computed without filter-seen). HRLI@1 measures whether the
+last interacted item 𝑣𝑡appears in the top-1 list; HRL2I@1 is defined analogously for 𝑣𝑡−1.
+in performance, a much more substantial drop is still observed
+under full shuffling.
+For datasets with inherently weak sequential signals, such as
+Steam and Diginetica [14], shuffling has a negligible effect on all
+models. These observations align with prior findings [40]; full
+results for all datasets and additional model variants, including
+DuoRec and BSARec, are available in our repository. DuoRec and
+BSARec also exhibit trends similar to SASRec.
+3.2
+Quantifying Last-Item Reliance via HRLI
+While inference-time shuffling probes a model’s sensitivity to per-
+turbations in input order, it does not directly characterize how the
+predicted ranking is structured under standard inference. To more
+directly quantify positional bias in the predicted ranking, we adopt
+the Hit Rate of the Last Item (HRLI@K) [23] as a diagnostic measure.
+This metric enables a systematic and quantitative characterization
+of positional bias, and will be used throughout the subsequent
+analysis.
+HRLI@K is defined as
+HRLI@𝐾=
+1
+|D|
+∑︁
+𝑆𝑢∈D
+I 𝑣𝑡∈Top-𝐾(𝑆𝑢),
+(2)
+where D denotes the evaluation set of user sequences, Top-𝐾(𝑆𝑢)
+is the recommendation list induced by the predicted scores 𝑝(𝑣𝑡+1 =
+𝑣| 𝑆𝑢; Θ), and I(·) is the indicator function that equals 1 if the con-
+dition is satisfied and 0 otherwise. Intuitively, HRLI@K measures
+the fraction of user sequences for which the last item in the input
+sequence reappears in the Top-𝐾recommendation list.
+Similarly, we define the Hit Rate of the Second-to-Last Item (HRL2I
+@K) by replacing 𝑣𝑡with the second-to-last item 𝑣𝑡−1. Together,
+HRLI and HRL2I quantify how frequently items at specific positions
+in the input sequence are recovered in the predicted ranking.
+In contrast to the standard ranking metrics used in Section 2.2.3,
+HRLI and HRL2I are computed without applying filter-seen across
+all datasets. This choice follows directly from the definition of these
+metrics, which are designed to measure how frequently a specific
+item appearing at a given position in the input sequence is ranked
+by the model. Applying filter-seen would trivially prevent the target
+item from appearing in the recommendation list, rendering HRLI
+and HRL2I ill-defined or uninformative. Although this evaluation
+setting differs from typical deployment scenarios, it is necessary to
+faithfully capture the intended quantity measured by these diag-
+nostics. HRLI should not be interpreted as a direct counterfactual
+measure of dependence on the final item. Rather, it measures how
+frequently the model ranks an item from a specified input posi-
+tion within the recommendation list under standard inference. We
+therefore use HRLI as a recency-localized ranking diagnostic that
+complements the perturbation-based analysis in Section 3.1. Its
+interpretation requires additional care in repeat-consumption do-
+mains.
+Throughout our experiments, we focus on the case 𝐾= 1. Under
+this setting, HRLI@1 captures the most extreme form of last-item
+localization, namely the case in which the last item is ranked first.
+We adopt this setting for clarity, as it provides a sharp and easily
+interpretable signal of positional dominance. Results for larger
+values of 𝐾exhibit similar qualitative trends and are reported in
+our repository.
+Observations. Figure 2 shows HRLI@1 and HRL2I@1 values for
+each model. Our results across nine datasets with varying domains
+and properties reveal that causal self-attention models, including
+SASRec, DuoRec, and BSARec, generally yield substantially higher
+HRLI@1 than HRL2I@1. Conversely, BERT4Rec and GRU4Rec dis-
+play a much smaller gap between these metrics, despite a slight
+inclination toward HRLI@1. These results reveal a highly localized
+ranking tendency toward the last interacted item in SASRec-based
+models. Even in datasets such as Steam and Diginetica, HRLI consis-
+tently exceeds HRL2I in relative terms. This provides a complemen-
+tary perspective to our shuffling experiments, revealing a degree
+of last-item reliance that remained undetected by sensitivity-based
+diagnostics.
+Taken together, these complementary diagnostics provide consis-
+tent evidence of highly localized last-item behavior in SASRec, but
+remain agnostic to the mechanisms responsible for this behavior.
+
+Residual Dominance as a Structural Account of
+Last-Item Reliance in Causal Self-Attention Recommenders
+RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA
+To move beyond descriptive evidence, we next analyze how infor-
+mation from different positions is structurally composed within the
+attention block.
+4
+Structural Analysis of Last-Item Reliance
+The empirical analyses in Section 3 reveal that SASRec exhibits
+last-item reliance, as evidenced by both inference-time shuffling
+and HRLI diagnostics. To examine how this behavior is structurally
+expressed in the representation used for prediction, we analyze
+the contributions of different input positions to the attention block
+output.
+4.1
+Analysis of Attention Block
+A common approach to analyzing self-attention models is to in-
+spect attention weights [38]. However, attention weights alone are
+insufficient to explain the observed behavior. In particular, atten-
+tion weights typically vary smoothly across positions, whereas
+the last-item reliance observed in Section 3 emerges as a highly
+discontinuous phenomenon. This discrepancy suggests that “where
+the model’s attention is placed” does not necessarily reflect “which
+information is actually used”.
+This limitation arises because attention weights alone do not
+indicate which information is actually utilized in the final repre-
+sentation. While attention weights describe how strongly each
+position is attended to, they do not directly quantify how much in-
+formation from that position survives in the representation used for
+prediction. In practice, information aggregation within a sequence
+is influenced not only by the attention mechanism, but also by other
+architectural components, most notably residual connections. To
+address this issue, we analyze the full attention block, explicitly
+accounting for all its constituent components.
+Specifically, we adopt a norm-based analysis [15, 16]. This ap-
+proach quantifies each position’s contribution using the norm of its
+input-wise component in the block output, rather than relying on
+attention weights alone. It thereby accounts for variations in the
+norms of transformed value vectors, residual addition, and layer
+normalization.
+Formally, let 𝑥𝑖denote the input representation at position 𝑖. The
+output of a causal self-attention block is:
+˜𝑥𝑖= LN(Attn(𝑥𝑖,𝑋) + 𝑥𝑖).
+Following [15, 16], this representation can be decomposed into
+input-wise contributions:
+˜𝑥𝑖=
+∑︁
+𝑗
+𝐹𝑖(𝑥𝑗),
+where 𝐹𝑖(𝑥𝑗) denotes the contribution of position 𝑗to position 𝑖.
+We quantify contextual aggregation using the mixing ratio:
+𝑟𝑖=
+Í
+𝑗≠𝑖∥𝐹𝑖(𝑥𝑗)∥
+Í
+𝑗∥𝐹𝑖(𝑥𝑗)∥.
+Lower values indicate dominance of self-information retention,
+while higher values suggest stronger aggregation of contextual
+information through the attention mechanism. Mixing ratios are
+computed using norm-based decomposition of the full attention
+block, in which multi-head attention is already integrated into a
+Table 2: Mixing ratios of SASRec and DuoRec. Attn denotes
+the attention-only output, +Res denotes the output after
+residual addition, and +LN denotes the subsequent output
+after layer normalization.
+SASRec
+DuoRec
+Dataset
+Attn
++Res
++LN
+Attn
++Res
++LN
+Beauty
+0.776
+0.119
+0.119
+0.776
+0.116
+0.115
+Sports
+0.775
+0.126
+0.122
+0.790
+0.119
+0.119
+Toys
+0.772
+0.123
+0.123
+0.780
+0.121
+0.121
+Video
+0.798
+0.169
+0.169
+0.773
+0.170
+0.170
+Diginetica
+0.721
+0.150
+0.149
+0.724
+0.152
+0.151
+ML-1M
+0.856
+0.395
+0.386
+0.862
+0.367
+0.359
+Steam
+0.794
+0.317
+0.276
+0.767
+0.299
+0.277
+BeerAdvocate
+0.959
+0.301
+0.287
+0.949
+0.311
+0.307
+Zvuk
+0.941
+0.267
+0.265
+0.926
+0.274
+0.271
+single representation and thus requires no explicit head-wise aver-
+aging. Table 2 reports values averaged across positions, layers, and
+test sequences to provide a compact cross-dataset comparison. To
+examine whether residual dominance is specific to the final posi-
+tion or concentrated in a particular layer, we additionally report
+position- and layer-specific AttnResLN mixing ratios for represen-
+tative sparse and dense datasets in Table 3. Because representations
+at deeper layers incorporate transformations from preceding lay-
+ers, these values characterize the representation after each layer
+rather than the isolated incremental effect of that layer. Since this
+approach is applicable to attention-based models with a compatible
+block structure regardless of their learning objective, we extend our
+analysis to DuoRec as well. Details of the derivation are provided
+in the supplementary material in our repository. 2
+4.2
+Results and Structural Interpretation
+Table 2 reports the mixing ratios computed at different stages of
+the attention block: the attention output alone (Attn), after adding
+the residual connection (AttnRes), and after applying layer nor-
+malization (AttnResLN).
+Across all datasets, the Attn values are consistently high, indi-
+cating that the attention output aggregates substantial informa-
+tion from other positions. Once the residual connection is added,
+however, the mixing ratio drops sharply. This pattern reveals a
+consistent structural tendency: although contextual information is
+aggregated by the attention operation, the residual addition sharply
+shifts the balance of the block output toward the same-position
+contribution.
+The additional effect of layer normalization is relatively minor
+compared with the effect of residual addition. Across datasets, the
+AttnRes and AttnResLN values are nearly identical, suggesting that
+residual addition is the primary structural factor associated with
+the reduction in contextual mixing. While the absolute values of the
+mixing ratio vary across datasets, the qualitative trend is consistent.
+To illustrate this tendency, Figure 3 visualizes the input-wise
+contribution patterns in SASRec for the Toys and ML-1M datasets,
+comparing the attention output alone with the complete attention
+2https://github.com/keito0329/Residual/blob/main/supplement.pdf
+
+RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA
+Kozaki et al.
+Figure 3: Input-wise contribution patterns in SASRec for the representative sparse and dense datasets, Toys and ML-1M.
+From left to right: Toys (Attn), Toys (AttnResLN), ML-1M (Attn), and ML-1M (AttnResLN). Compared with the attention-only
+contributions (Attn), the complete attention block outputs after residual addition and layer normalization (AttnResLN) exhibit
+markedly stronger diagonal components, indicating stronger preservation of same-position information.
+Table 3: Position- and layer-specific AttnResLN mixing ra-
+tios of SASRec on Toys and ML-1M, representing sparse and
+dense settings, respectively. Values are averaged over test
+sequences.
+Dataset
+Layer
+𝐿
+𝐿−1
+𝐿−2
+Toys
+1
+0.1278
+0.1283
+0.1251
+2
+0.1182
+0.1178
+0.1135
+ML-1M
+1
+0.3984
+0.3819
+0.3798
+2
+0.3660
+0.3617
+0.3606
+block output after residual addition and layer normalization. Com-
+pared with the attention-only contribution patterns, the full block
+exhibits markedly stronger diagonal components, indicating strong
+preservation of same-position information.
+Table 3 further examines whether residual dominance is specific
+to the final position or concentrated in a particular layer. Within
+each layer, the mixing ratios vary only modestly across 𝐿, 𝐿−1,
+and 𝐿−2. The maximum absolute position-wise difference is 0.0032
+in layer 1 and 0.0047 in layer 2 on Toys, and 0.0186 and 0.0054,
+respectively, on ML-1M. Notably, the final-position mixing ratio is
+not consistently lower than those of the preceding positions; on
+ML-1M, it is slightly higher. Together with the sharp reduction in
+mixing observed after residual addition in Table 2, these results
+indicate that residual dominance is broadly expressed across the
+examined positions and in both Transformer layers, rather than
+being specifically concentrated at the final position.
+These results refine the structural account of last-item reliance.
+The attention block exhibits a broadly self-preserving tendency
+across the examined positions. In SASRec, however, next-item pre-
+diction is formed exclusively from the final-position representation.
+The preserved same-position component at this prediction inter-
+face is therefore anchored to the most recently interacted item.
+Consequently, the discontinuous last-position privilege observed in
+Section 3 can be understood as the interaction between this broadly
+self-preserving tendency and the final-position-only prediction
+interface.
+4.3
+Discussion
+In principle, the norm-based analysis employed in this section can
+be applied to other Transformer-based sequential recommendation
+models, including bidirectional models such as BERT4Rec. However,
+we deliberately refrain from conducting a structural comparison
+with BERT4Rec in this work. In SASRec-style causal models, predic-
+tions are made from the encoder output at the final item position,
+whose residual input is associated with an actual interacted item.
+Consequently, the mixing ratio reflects a structural trade-off be-
+tween preserving the final-position input, which is anchored to the
+last interacted item, and aggregating information from preceding
+positions. In contrast, BERT4Rec predicts the next item from the
+encoder output at a [MASK] position, whose residual input corre-
+sponds to a virtual placeholder rather than an observed item. As
+a result, the decomposition into preserving versus mixing effects
+does not align directly with last-item reliance in sequential recom-
+mendation, making the mixing ratio less task-aligned for structural
+interpretation. For this reason, we restrict our structural analysis
+to SASRec-style causal models, where the interpretation of infor-
+mation preservation and aggregation is clearer and more directly
+connected to the prediction process.
+5
+Inference-Time Probing of Residual
+Contribution
+While Section 4 provides a structural account of last-item reliance,
+it remains unclear whether prediction-time representations and
+rankings vary systematically with residual strength. We therefore
+apply inference-time residual scaling as a controlled mechanistic
+probe and examine its relationship to contextual mixing, last-item
+reliance, and ranking outcomes. This intervention is intended as a
+sensitivity analysis rather than strict causal identification.
+5.1
+Residual Scaling as a Mechanistic Probe
+In a SASRec-style Transformer block, the representation after self-
+attention and residual addition is
+ℎ𝑖= 𝑥𝑖+ Attn(𝑥)𝑖.
+(3)
+
+Residual Dominance as a Structural Account of
+Last-Item Reliance in Causal Self-Attention Recommenders
+RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA
+Figure 4: Effect of inference-time residual scaling (𝛼) applied to the residual branch at all sequence positions in SASRec. Left:
+structural mixing averaged over positions and layers after the full attention block (AttnResLN; mixing ratio) and recency-
+localized reliance (HRLI@1) as functions of 𝛼; the red dashed line indicates the standard setting 𝛼= 1. Right: accuracy–reliance
+trade-off, plotting HR@10 and NDCG@10 against HRLI@1; each colored point corresponds to a value of 𝛼(colorbar), and
+baseline markers indicate BERT4Rec and GRU4Rec.
+We modify this computation at inference time:
+ℎ(𝛼)
+𝑖
+= 𝛼𝑥𝑖+ Attn(𝑥)𝑖,
+(4)
+where 𝛼modulates the strength of residual preservation. Reduc-
+ing 𝛼weakens same-position residual preservation at all sequence
+positions in every Transformer layer and increases the relative
+contribution of contextual aggregation. At the final-position predic-
+tion interface, this reduces the direct preservation of information
+anchored to the last item.
+As shown in Figure 4, decreasing 𝛼consistently increases the
+AttnResLN mixing ratio and decreases HRLI@1. Residual strength
+is therefore monotonically associated with both contextual mix-
+ing and last-item reliance, supporting the structural account in
+Section 4.
+We further analyze how ranking performance changes with
+𝛼. As 𝛼decreases, HR@10 and NDCG@10 consistently degrade,
+while last-item reliance is reduced. This reveals a trade-off between
+preserving self-information at the final position and incorporating
+contextual information from preceding positions.
+Importantly, this trade-off does not by itself indicate whether
+contextual information contributes meaningful predictive signals
+or merely reflects degradation of the final representation. These
+possibilities cannot be distinguished using standard ranking metrics
+alone. Therefore, at this stage, residual scaling establishes that pre-
+diction behavior varies systematically with residual strength, but
+does not determine whether additional predictive signals are effec-
+tively utilized. To address this question, we next examine whether
+useful predictive signals exist beyond the final position and whether
+reducing residual strength can recover some of these final-position
+misses. Full residual-scaling curves for all datasets are available in
+our repository.
+5.2
+Correct Predictions at Non-Final Positions
+Here, a non-final hit means that the representation at position 𝐿−𝑘
+ranks the final test target 𝑣𝑡+1 within the top 10; it does not refer to
+the position-specific next-item target used during training.
+Table 4 reports the joint proportion of all test sequences for
+which the final-position prediction misses the ground-truth item,
+while the representation at a preceding position ranks it within
+the top 10. The results show that correct predictions can occur at
+non-final positions even when the final-position prediction fails.
+Across datasets, the largest single-position joint rate corresponds
+to approximately 24–46% of the standard HR@10 value, indicating
+that such cases occur at a non-negligible scale. These results estab-
+lish the presence of potentially useful predictions at non-final posi-
+tions. In the next subsection, we examine whether reducing residual
+strength can recover the corresponding final-position misses.
+5.3
+Recovery of Final-Position Misses
+To test whether reducing residual strength can recover final-position
+misses with correct non-final hits, we consider sequences satisfying
+the following conditions under the standard setting 𝛼= 1: (i) the
+final-position representation fails to rank the final test target 𝑣𝑡+1
+within the top 10, and (ii) at least one representation at 𝐿−1, 𝐿−2,
+or 𝐿−3 ranks 𝑣𝑡+1 within the top 10. This conditioning isolates
+final-position misses for which a correct non-final hit is already
+present under standard inference.
+For each value of 𝛼, we measure the fraction of these sequences
+for which the final-position representation ranks 𝑣𝑡+1 within the
+top 10. As shown in Figure 5, decreasing 𝛼recovers a subset of final-
+position misses, with peak recovery observed around 𝛼≈0.1–0.3.
+Because every evaluated sequence contains a correct non-final
+hit under standard inference, the observed recovery is consistent
+with the hypothesis that reducing residual preservation increases
+the contribution of non-final predictive information to the final-
+position ranking.
+5.4
+Validation-Based Selection
+While our primary goal is analysis rather than optimization, we
+include this experiment to demonstrate that the observed controlla-
+bility is reproducible without access to test data. We adopt a simple
+validation-based selection rule:
+𝛼∗= arg max
+𝛼
+Recoveryval(𝛼)
+s.t.
+HR@10val(𝛼) ≥(1 −𝜀)HR@10val(1)
+(5)
+This formulation prioritizes recovery while constraining accu-
+racy degradation. Figure 6 shows, on Toys, that validation-selected
+
+RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA
+Kozaki et al.
+Table 4: Correct non-final predictions among final-position misses. The first row reports the standard HR@10 obtained from
+the final-position representation. For each preceding position 𝐿−𝑘, the remaining rows report the joint proportion of all test
+sequences for which the final-position prediction misses the ground-truth item, while the representation at position 𝐿−𝑘
+ranks it within the top 10. These values indicate the prevalence of potentially useful predictive signals at non-final positions.
+Dataset
+Metric
+Beauty
+Sports
+Toys
+Video
+Diginetica
+ML-1M
+Steam
+BeerAdvocate
+Zvuk
+HR@10 at 𝐿(standard inference)
+0.0381
+0.0342
+0.0574
+0.0403
+0.2900
+0.1588
+0.0639
+0.0389
+0.2416
+HR@10 at 𝐿−1 and miss at 𝐿
+0.0116
+0.0157
+0.0185
+0.0171
+0.1153
+0.0347
+0.0235
+0.0150
+0.0583
+HR@10 at 𝐿−2 and miss at 𝐿
+0.0124
+0.0125
+0.0134
+0.0145
+0.0782
+0.0422
+0.0241
+0.0141
+0.0415
+HR@10 at 𝐿−3 and miss at 𝐿
+0.0112
+0.0115
+0.0150
+0.0124
+0.0914
+0.0298
+0.0236
+0.0139
+0.0431
+Figure 5: Recovery of final-position misses under inference-
+time residual scaling. For each dataset, we consider sequences
+for which the standard final-position inference (𝛼= 1) fails
+to rank the ground-truth item within the top 10, while at
+least one representation at 𝐿−1, 𝐿−2, or 𝐿−3 ranks it within
+the top 10. The curve reports the fraction of such sequences
+for which the final-position representation ranks the ground-
+truth item within the top 10 after applying residual scaling
+with factor 𝛼at all sequence positions. The recovery rate is
+zero at 𝛼= 1 by definition.
+𝛼closely matches oracle-selected 𝛼over a wide range of 𝜖values,
+reproducing the same accuracy–recovery trade-off observed on the
+test set.
+These results indicate that the controllability revealed by resid-
+ual scaling is stable and can be reproduced using standard valida-
+tion procedures. However, this experiment is intended only as a
+demonstration of reproducibility and does not constitute a separate
+modeling contribution. Results for additional datasets are available
+in our repository.
+Summary. Taken together, the results in this section establish
+a consistent picture: (1) prediction behavior varies systematically
+with residual strength, (2) correct predictions can occur at non-final
+positions when the final position misses, and (3) reducing residual
+strength recovers a subset of these cases.
+6
+Related Work
+6.1
+Sequential Recommendation
+Sequential recommender systems were initially dominated by RNN-
+[10, 19] and CNN-based models [35, 43], which improved upon
+0.00
+0.25
+0.50
+0.75
+1.00
+α
+[Toys] Alpha Selection Comparison
+Val-selected
+Oracle best
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9
+1.0
+ε
+-0.020
+-0.010
++0.000
+ΔHR@10 (test)
+ΔHR@10
+Recovery (test)
+0.00
+0.05
+0.10
+0.15
+Recovery (test)
+Figure 6: Validation-based reproduction of the accu-
+racy–recovery
+trade-off.
+(Top)
+Comparison
+between
+validation-selected and oracle-selected 𝛼across different
+values of 𝜀. (Bottom) Corresponding test performance,
+showing the trade-off between ΔHR@10 relative to the 𝛼= 1
+baseline and recovery under validation-based selection.
+On Toys, validation-based selection reproduces the same
+accuracy–recovery trade-off observed under oracle tuning.
+Markov chain–based models [28, 44] by capturing longer-term de-
+pendencies. Transformer-based architectures later advanced the
+field by enabling flexible sequence modeling via self-attention [12,
+33, 39], with causal self-attention models such as SASRec becoming
+widely adopted baselines. Despite recent developments including
+graph-based methods [25, 27, 41], generative models [20, 22, 42],
+and LLM-based approaches [7, 21, 30], causal self-attention remains
+a core architectural choice in many sequential recommenders. Un-
+derstanding the inference behavior of such foundational models is
+therefore important for clarifying how sequential information is
+actually utilized.
+6.2
+Attention Analysis
+Prior work has investigated which dependencies self-attention
+should emphasize in sequential recommendation [31, 38]. Several
+studies [8, 38] highlight the importance of local and short-term
+dependencies, showing that unconstrained global attention can be
+noisy or suboptimal, especially under sparse interaction regimes.
+While these works analyze or modify attention mechanisms to
+
+Residual Dominance as a Structural Account of
+Last-Item Reliance in Causal Self-Attention Recommenders
+RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA
+improve performance, they largely focus on attention weights or
+attention modules in isolation. In contrast, how attention outputs
+are utilized at prediction time remains underexplored, motivating
+our analysis of the full attention block with residual connections.
+6.3
+Recency Bias
+Recency bias refers to the tendency of sequential recommender
+systems to rely disproportionately on recent interactions [2]. Prior
+work proposed both regularization-based mitigation strategies [2]
+and evaluation metrics such as HRLI [23], revealing that causal
+self-attention models often exhibit extreme last-item reliance. More
+recent studies [40] further demonstrated that this behavior persists
+across architectures, embedding sizes, and loss functions, and ar-
+gued that strong last-item reliance is essential for achieving high
+next-item prediction accuracy.
+In contrast to these studies, which primarily characterize or
+justify last-item reliance as an empirical or task-level property, our
+work investigates how such extreme dependence is structurally
+expressed in the prediction representation of SASRec.
+7
+Conclusion
+We showed that causal self-attention recommenders often exhibit
+highly localized last-item reliance at inference time. Through norm-
+based analysis of the full attention block, we identified residual
+dominance as a broadly self-preserving tendency that, together
+with the final-position-only prediction interface, provides a struc-
+tural account of this behavior. Inference-time residual scaling fur-
+ther revealed systematic relationships among residual strength,
+contextual mixing, and last-item reliance, and recovered a subset
+of final-position misses with correct non-final hits. These findings
+establish prediction-time information utilization as a useful ana-
+lytical lens for understanding causal self-attention recommenders
+beyond attention weights and ranking accuracy alone.
+Limitations and future work. Residual dominance should not
+be interpreted as the sole cause of last-item reliance. Other factors,
+such as causal masking, positional information, the prediction in-
+terface, training objectives, data characteristics, and optimization
+may also contribute. Our analysis and intervention are restricted
+to causal self-attention models that predict from the final-position
+representation, and extending this characterization to other predic-
+tion heads and training objectives remains an important direction
+for future work. In addition, HRLI and HRL2I are designed as di-
+agnostic metrics rather than replacements for standard accuracy
+metrics, and establishing their connection to online utility is an
+open problem. Finally, understanding how these findings trans-
+late to real-world recommendation settings remains an important
+direction for future work.
+Acknowledgments
+This work was partly supported by JSPS KAKENHI Grant Numbers
+JP24K02942 and JP23K11141.
+References
+[1] Filippo Betello, Federico Siciliano, Pushkar Mishra, and Fabrizio Silvestri. 2024.
+Investigating the robustness of sequential recommender systems against training
+data perturbations. In European Conference on Information Retrieval. Springer,
+205–220.
+[2] Bo Chang, Can Xu, Matthieu Lê, Jingchen Feng, Ya Le, Sriraj Badam, Ed Chi, and
+Minmin Chen. 2022. Recency dropout for recurrent recommender systems. arXiv
+preprint arXiv:2201.11016 (2022).
+[3] Alexander Dallmann, Daniel Zoller, and Andreas Hotho. 2021. A case study
+on sampling strategies for evaluating neural sequential item recommendation
+models. In Proceedings of the ACM Conference on Recommender Systems. 505–514.
+[4] Hui Fang, Danning Zhang, Yiheng Shu, and Guibing Guo. 2020. Deep learning
+for sequential recommendation: Algorithms, influential factors, and evaluations.
+ACM Transactions on Information Systems 39, 1 (2020), 1–42.
+[5] Maurizio Ferrari Dacrema, Paolo Cremonesi, and Dietmar Jannach. 2019. Are
+we really making much progress? A worrying analysis of recent neural recom-
+mendation approaches. In Proceedings of the ACM Conference on Recommender
+Systems. 101–109.
+[6] Danil Gusak, Anna Volodkevich, Anton Klenitskiy, Alexey Vasilev, and Evgeny
+Frolov. 2025. Time to split: Exploring data splitting strategies for offline eval-
+uation of sequential recommenders. In Proceedings of the ACM Conference on
+Recommender Systems. 874–883.
+[7] Jesse Harte, Wouter Zorgdrager, Panos Louridas, Asterios Katsifodimos, Dietmar
+Jannach, and Marios Fragkoulis. 2023. Leveraging large language models for se-
+quential recommendation. In Proceedings of the ACM Conference on Recommender
+Systems. 1096–1102.
+[8] Zhankui He, Handong Zhao, Zhe Lin, Zhaowen Wang, Ajinkya Kale, and Julian
+McAuley. 2021. Locker: Locally constrained self-attentive sequential recommen-
+dation. In Proceedings of the ACM International Conference on Information and
+Knowledge Management. 3088–3092.
+[9] Balázs Hidasi and Ádám Tibor Czapp. 2023. Widespread flaws in offline evaluation
+of recommender systems. In Proceedings of the ACM Conference on Recommender
+Systems. 848–855.
+[10] Balázs Hidasi, Alexandros Karatzoglou, Linas Baltrunas, and Domonkos Tikk.
+2015. Session-based recommendations with recurrent neural networks. arXiv
+preprint arXiv:1511.06939 (2015).
+[11] Karl Higley, Even Oldridge, Ronay Ak, Sara Rabhi, and Gabriel de Souza
+Pereira Moreira. 2022. Building and deploying a multi-stage recommender sys-
+tem with Merlin. In Proceedings of the ACM Conference on Recommender Systems.
+632–635.
+[12] Wang-Cheng Kang and Julian McAuley. 2018. Self-attentive sequential recom-
+mendation. In Proceedings of the IEEE International Conference on Data Mining.
+197–206.
+[13] Anton Klenitskiy and Alexey Vasilev. 2023. Turning dross into gold loss: Is
+BERT4Rec really better than SASRec?. In Proceedings of the ACM Conference on
+Recommender Systems. 1120–1125.
+[14] Anton Klenitskiy, Anna Volodkevich, Anton Pembek, and Alexey Vasilev. 2024.
+Does it look sequential? An analysis of datasets for evaluation of sequential
+recommendations. In Proceedings of the ACM Conference on Recommender Systems.
+1067–1072.
+[15] Goro Kobayashi, Tatsuki Kuribayashi, Sho Yokoi, and Kentaro Inui. 2020. At-
+tention is not only a weight: analyzing transformers with vector norms. In Pro-
+ceedings of the Conference on Empirical Methods in Natural Language Processing.
+7057–7075.
+[16] Goro Kobayashi, Tatsuki Kuribayashi, Sho Yokoi, and Kentaro Inui. 2021. In-
+corporating residual and normalization layers into analysis of masked language
+models. In Proceedings of the Conference on Empirical Methods in Natural Language
+Processing. 4547–4568.
+[17] Venkata Harshit Koneru, Xenija Neufeld, Sebastian Loth, and Andreas Grün.
+2025. SASRec in action: Real-world adaptations for ZDF streaming service. In
+Proceedings of the ACM Conference on Recommender Systems. 1054–1057.
+[18] Walid Krichene and Steffen Rendle. 2020. On sampled metrics for item recommen-
+dation. In Proceedings of the ACM SIGKDD International Conference on Knowledge
+Discovery and Data Mining. 1748–1757.
+[19] Jing Li, Pengjie Ren, Zhumin Chen, Zhaochun Ren, Tao Lian, and Jun Ma. 2017.
+Neural attentive session-based recommendation. In Proceedings of the ACM Inter-
+national Conference on Information and Knowledge Management. 1419–1428.
+[20] Zihao Li, Aixin Sun, and Chenliang Li. 2023. Diffurec: A diffusion model for
+sequential recommendation. ACM Transactions on Information Systems 42, 3
+(2023), 1–28.
+[21] Qidong Liu, Xian Wu, Yejing Wang, Zijian Zhang, Feng Tian, Yefeng Zheng, and
+Xiangyu Zhao. 2024. LLM-ESR: Large language models enhancement for long-
+tailed sequential recommendation. Advances in Neural Information Processing
+Systems 37 (2024), 26701–26727.
+[22] Wenyu Mao, Shuchang Liu, Haoyang Liu, Haozhe Liu, Xiang Li, and Lantao Hu.
+2025. Distinguished quantized guidance for diffusion-based sequence recommen-
+dation. In Proceedings of the ACM on Web Conference. 425–435.
+[23] Jeonglyul Oh and Sungzoon Cho. 2024. Measuring recency bias in sequential
+recommendation systems. arXiv preprint arXiv:2409.09722 (2024).
+[24] Li-Wei Pan, Wei-Ke Pan, Mei-Yan Wei, Hong-Zhi Yin, and Zhong Ming. 2026. A
+survey on sequential recommendation. Frontiers of Computer Science 20, 3 (2026),
+2003606.
+
+RecSys ’26, September 27-October 02, 2026, Minneapolis, MN, USA
+Kozaki et al.
+[25] Ruihong Qiu, Zi Huang, Tong Chen, and Hongzhi Yin. 2021. Exploiting positional
+information for session-based recommendation. ACM Transactions on Information
+Systems 40, 2 (2021), 1–24.
+[26] Ruihong Qiu, Zi Huang, Hongzhi Yin, and Zijian Wang. 2022. Contrastive
+learning for representation degeneration problem in sequential recommendation.
+In Proceedings of the ACM International Conference on Web Search and Data Mining.
+813–823.
+[27] Ruihong Qiu, Hongzhi Yin, Zi Huang, and Tong Chen. 2020. GAG: Global at-
+tributed graph neural network for streaming session-based recommendation. In
+Proceedings of the International ACM SIGIR Conference on Research and Develop-
+ment in Information Retrieval. 669–678.
+[28] Steffen Rendle, Christoph Freudenthaler, and Lars Schmidt-Thieme. 2010. Factor-
+izing personalized markov chains for next-basket recommendation. In Proceedings
+of the ACM International Conference on World Wide Web. 811–820.
+[29] Noveen Sachdeva and Julian McAuley. 2020. How useful are reviews for recom-
+mendation? A critical review and potential improvements. In Proceedings of the
+International ACM SIGIR Conference on Research and Development in Information
+Retrieval. 1845–1848.
+[30] Keigo Sakurai, Ren Togo, Takahiro Ogawa, and Miki Haseyama. 2025. LLM
+is knowledge graph reasoner: LLM’s intuition-aware knowledge graph reason-
+ing for cold-start sequential recommendation. In Proceedings of the European
+Conference on Information Retrieval. 263–278.
+[31] Yehjin Shin, Jeongwhan Choi, Hyowon Wi, and Noseong Park. 2024. An atten-
+tive inductive bias for sequential recommendation beyond the self-attention. In
+Proceedings of the AAAI Conference on Artificial Intelligence, Vol. 38. 8984–8992.
+[32] Aixin Sun. 2023. Take a fresh look at recommender systems from an evaluation
+standpoint. In Proceedings of the International ACM SIGIR Conference on Research
+and Development in Information Retrieval. 2629–2638.
+[33] Fei Sun, Jun Liu, Jian Wu, Changhua Pei, Xiao Lin, Wenwu Ou, and Peng Jiang.
+2019. BERT4Rec: Sequential recommendation with bidirectional encoder repre-
+sentations from transformer. In Proceedings of the ACM International Conference
+on Information and Knowledge Management. 1441–1450.
+[34] Zhu Sun, Di Yu, Hui Fang, Jie Yang, Xinghua Qu, Jie Zhang, and Cong Geng.
+2020. Are we evaluating rigorously? Benchmarking recommendation for repro-
+ducible evaluation and fair comparison. In Proceedings of the ACM Conference on
+Recommender Systems. 23–32.
+[35] Jiaxi Tang and Ke Wang. 2018. Personalized top-n sequential recommendation
+via convolutional sequence embedding. In Proceedings of the ACM International
+Conference on Web Search and Data Mining. 565–573.
+[36] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones,
+Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. 2017. Attention is all
+you need. Advances in Neural Information Processing Systems 30 (2017).
+[37] Shoujin Wang, Liang Hu, Yan Wang, Longbing Cao, Quan Z Sheng, and Mehmet
+Orgun. 2019.
+Sequential recommender systems: challenges, progress and
+prospects. arXiv preprint arXiv:2001.04830 (2019).
+[38] Yueqi Wang, Zhankui He, Zhenrui Yue, Julian McAuley, and Dong Wang. 2025.
+Your causal self-attentive recommender hosts a lonely neighborhood. In Pro-
+ceedings of the ACM International Conference on Web Search and Data Mining.
+688–696.
+[39] Liwei Wu, Shuqing Li, Cho-Jui Hsieh, and James Sharpnack. 2020. SSE-PT:
+Sequential recommendation via personalized transformer. In Proceedings of the
+ACM Conference on Recommender Systems. 328–337.
+[40] Cong Xu, Guoliang Li, Jun Wang, and Wei Zhang. 2026. Markovian pre-trained
+transformer for next-item recommendation. arXiv preprint arXiv:2601.08275
+(2026).
+[41] Chengfeng Xu, Pengpeng Zhao, Yanchi Liu, Victor S Sheng, Jiajie Xu, Fuzhen
+Zhuang, Junhua Fang, and Xiaofang Zhou. 2019. Graph contextualized self-
+attention network for session-based recommendation. In Proceedings of the Inter-
+national Joint Conference on Artificial Intelligence. 3940–3946.
+[42] Zhengyi Yang, Jiancan Wu, Zhicai Wang, Xiang Wang, Yancheng Yuan, and
+Xiangnan He. 2023. Generate what you prefer: Reshaping sequential recommen-
+dation via guided diffusion. Advances in Neural Information Processing Systems
+36 (2023), 24247–24261.
+[43] Fajie Yuan, Alexandros Karatzoglou, Ioannis Arapakis, Joemon M Jose, and Xi-
+angnan He. 2019. A simple convolutional generative network for next item
+recommendation. In Proceedings of the ACM International Conference on Web
+Search and Data Mining. 582–590.
+[44] Andrew Zimdars, David Maxwell Chickering, and Christopher Meek. 2013. Using
+temporal data for making recommendations. arXiv preprint arXiv:1301.2320
+(2013).

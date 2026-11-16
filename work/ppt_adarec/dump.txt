@@ -1,0 +1,614 @@
+slide_size 12191365 6858000 13.33 7.50
+num_slides 46
+==========================================================================================
+SLIDE 1 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=7.50
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=1.00 T=1.90 W=11.30 H=3.20
+     TEXT: ADARec 文献阅读及代码复现 || 自适应扩散增强 + 混合专家 MoE 的序列推荐 || AAAI 2026  ·  论文原文 + 官方代码库(Cxx-0/ADARec) + 本地复现
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=1.00 T=6.30 W=11.30 H=0.70
+     TEXT: 研究生组会汇报
+  [TEXT_BOX (17)] name='文本框 4' id=5 L=5.49 T=4.40 W=2.80 H=0.50
+     TEXT: 汇报人：张心雨
+==========================================================================================
+SLIDE 2 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 汇报提纲
+  [AUTO_SHAPE (1)] name='Rectangle 3' id=4 L=0.40 T=1.50 W=0.12 H=2.70
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 4' id=5 L=0.40 T=4.50 W=0.12 H=2.50
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=0.50 T=1.55 W=12.30 H=5.10
+     TEXT: 第一部分 · 文献阅读 ||   1.1 论文背景 / 研究目的 / 研究工作 ||   1.2 各模块公式详解（ADC / HDA / HP-MoE / 损失） ||   1.3 论文宣称效果（按 5 个研究问题 RQ1~RQ5） ||      RQ1 主结果 · RQ2 消融 · RQ3 效率 · RQ4 超参 · RQ5 稀疏 || 第二部分 · 代码复现 ||   2.1 各文件作用   2.2 各模块具体实现 ||   2.3 参数设置 / 数据处理 / 模型设定 / 模型训练 ||   2.4 训练执行流程图 / 三组件耦合示意 ||   2.5 复现结果及分析（按 RQ1~RQ5） ||   2.6 实验日志与结果图表 || 第三部分 · 学习总结 ||   3.1 假期学习总结 ||   3.2 后续学习安排
+==========================================================================================
+SLIDE 3 layout=Blank
+  [TEXT_BOX (17)] name='TextBox 1' id=2 L=1.00 T=2.70 W=11.30 H=2.00
+     TEXT: PART 1 || 文献阅读
+==========================================================================================
+SLIDE 4 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.1 论文背景
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 序列推荐 + 数据稀疏场景下的用户意图层次建模
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.55 W=6.90 H=3.55
+     TEXT: 研究任务：基于用户历史行为序列，预测用户的下一个交互物品 || 核心挑战 || ① 数据稀疏 → 模型过拟合 || ② 用户意图的层次结构在稀疏数据中丢失 || ③ 用户活动服从长尾分布，进一步加剧稀疏 || 已有方法不足 ||  现有数据增强只生成「相似/多样」物品，忽视意图层次重建 ||  多样性缺乏用户高层意图引导，往往偏离用户真实意图
+  [PICTURE (13)] name='图片 8' id=9 L=6.88 T=2.45 W=6.06 H=2.71
+     TEXT: 
+==========================================================================================
+SLIDE 5 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.1 研究目的
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.55 W=12.30 H=5.70
+     TEXT: 要解决的问题 ||   如何在数据稀疏场景下，从单条稀疏序列重建用户意图的层次结构， ||   从而缓解过拟合、准确理解用户真实意图 || 核心论点 ||   数据增强的关键不在于盲目权衡相似性与多样性， ||   而在于构建用户意图的层次结构 || 方法学假设 ||   扩散模型的逐步去噪轨迹会迫使模型在更高抽象层次上推断用户意图 ||   高噪声步 → 粗粒度意图（用户不变本质）；低噪声步 → 细粒度意图（具体偏好） || 目标：在标准基准与稀疏序列上均优于 SOTA
+  [PICTURE (13)] name='图片 7' id=8 L=8.66 T=1.25 W=4.31 H=4.12
+     TEXT: 
+==========================================================================================
+SLIDE 6 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.1 研究工作
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 整体框架：骨干 ELCRec + 扩散 DDPM + 三创新组件
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.55 W=6.70 H=5.70
+     TEXT: ADC（自适应深度控制器） ||   为每条序列自适应确定增强深度，Gumbel-Softmax 选择 + 探索损失 || HDA（分层扩散增强） ||   利用整条逐步去噪轨迹重建粗/细粒度意图层次 || HP-MoE（分层解析混合专家） ||   解耦粗/细粒度意图的专家 + 内容感知两级门控融合 || 继承：ELCRec 骨干、DDPM 线性方差调度、意图学习范式
+  [PICTURE (13)] name='图片 7' id=8 L=2.92 T=4.71 W=8.36 H=2.64
+     TEXT: 
+==========================================================================================
+SLIDE 7 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.2 模块公式（1/4）：ADC 自适应深度控制器
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: Eq.(1)-(3)
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.50 W=12.30 H=1.20
+     TEXT: 作用：为每条序列自适应确定扩散增强深度 Tᵤ || 输入：序列嵌入 E⁰ᵤ(ℝ^{L×D}) + 长度嵌入 Vₗᵤ
+  [AUTO_SHAPE (1)] name='Rectangle 5' id=6 L=0.50 T=2.28 W=12.30 H=0.70
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 7' id=8 L=0.50 T=3.18 W=12.30 H=0.70
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 9' id=10 L=0.50 T=4.08 W=12.30 H=0.70
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 11' id=12 L=0.50 T=5.60 W=12.30 H=1.03
+     TEXT:   前向取 argmax 得离散深度 Tᵤ；反向用软概率 pᵤ 回传（可微） ||   辅助探索损失 L_expl 防止 ADC 坍缩到只选浅深度
+  [AUTO_SHAPE (1)] name='Rectangle 9' id=14 L=0.50 T=4.90 W=12.30 H=0.70
+     TEXT: 
+==========================================================================================
+SLIDE 8 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.2 模块公式（2/4）：HDA 分层扩散增强
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: Eq.(4)-(5)
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.50 W=12.30 H=0.60
+     TEXT: 作用：用扩散去噪轨迹重建从细到粗的意图层次 Aᵤ
+  [AUTO_SHAPE (1)] name='Rectangle 5' id=6 L=0.50 T=2.30 W=12.30 H=0.80
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 7' id=8 L=0.50 T=3.30 W=12.30 H=0.80
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 9' id=10 L=0.50 T=5.17 W=12.30 H=1.51
+     TEXT: 意图层次：高 k 元素 = 粗粒度意图（信息压缩）；低 k 元素 = 细粒度意图（信息保留） ||   信息量关系：I(Êₖ; Eᵤ) ≪ H(Eᵤ)（高 k）→ I(Êₖ; Eᵤ) ≈ H(Eᵤ)（低 k） || 输出：结构化集合 Aᵤ = {Êᵀᵘᵤ, ..., Ê⁰ᵤ}（非单一向量） ||   去噪网络 D_θ 用标准 MSE 损失 L_deno 优化（实现为 MLP）
+  [AUTO_SHAPE (1)] name='Rectangle 7' id=11 L=0.49 T=4.35 W=12.30 H=0.80
+     TEXT: 
+==========================================================================================
+SLIDE 9 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.2 模块公式（3/4）：HP-MoE 分层解析混合专家
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: Eq.(6)-(11)
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.45 W=12.30 H=0.50
+     TEXT: 作用：解耦粗/细粒度意图，两级门控融合得最终用户表征 hᵤ
+  [AUTO_SHAPE (1)] name='Rectangle 5' id=6 L=0.50 T=2.05 W=12.30 H=0.62
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 7' id=8 L=0.50 T=2.80 W=12.30 H=0.62
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 9' id=10 L=0.50 T=3.55 W=12.30 H=0.62
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 11' id=12 L=0.50 T=4.30 W=12.30 H=0.62
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 13' id=14 L=0.50 T=5.05 W=12.30 H=0.62
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 15' id=16 L=0.50 T=6.46 W=12.30 H=0.99
+     TEXT: Eq.(6) 粗粒度对比损失 L_cont（InfoNCE）：强制粗粒度专家学习「用户不变本质」 || Eq.(7) 即 C-A Router（Content-Aware Router，内容感知路由）——第一级门控，属 HP-MoE 融合端 ||   注意：它与 ADC（生成端控深度）是职责不同的两个模块，代码中已合并进同一个 probs（详见 2.2 ADC）
+  [AUTO_SHAPE (1)] name='Rectangle 13' id=17 L=0.50 T=5.83 W=12.30 H=0.62
+     TEXT: 
+==========================================================================================
+SLIDE 10 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.2 模块公式（4/4）：总损失函数
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: Eq.(12)-(13)
+  [AUTO_SHAPE (1)] name='Rectangle 4' id=5 L=0.50 T=1.70 W=12.30 H=0.80
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 6' id=7 L=0.50 T=2.70 W=12.30 H=0.80
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 8' id=9 L=0.50 T=3.70 W=12.30 H=2.45
+     TEXT: 四项损失职责 ||   L_rec：直接对应最终任务（预测下一物品）——主监督信号 ||   L_deno：去噪网络 MSE ‖ε_θ − ε‖²，支撑意图层次重建质量 ||   L_cont：粗粒度不变性对比损失，提升粗粒度意图判别性 ||   L_expl：负熵探索损失 −Σ p log p，防止深度坍缩 || L_rec 直接对应最终任务；其余三项为辅助正则，间接提升推荐效果
+==========================================================================================
+SLIDE 11 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.3 论文宣称效果（1/5）：RQ1 主结果 Table 1
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 4 数据集 HIT@5/20, NDCG@5/20 —— ADARec 是否优于 SOTA
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=0.62 T=6.57 W=12.30 H=5.70
+     TEXT: 论文宣称：ADARec 在全部 4 个数据集上 HIT@5/20、NDCG@5/20 均达 SOTA（* 最优标记），提升 2.3%~9.1%
+  [PICTURE (13)] name='图片 6' id=7 L=0.77 T=1.50 W=11.79 H=4.96
+     TEXT: 
+==========================================================================================
+SLIDE 12 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.3 论文宣称效果（2/5）：RQ2 消融 Table 4
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: Beauty，HR@20 / NDCG@20 及下降幅度 —— 关键组件贡献
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=0.50 T=5.50 W=12.30 H=0.67
+     TEXT: 三组件均有效：HDA 贡献最大（7%），HP-MoE 次之（降 5%），ADC 再次（4%），同时去掉ADC和HDA会下降10% || 仅用 HP-MoE 性能接近 ELCRec，说明解析器有效性依赖 HDA 提供的结构化输入
+  [PICTURE (13)] name='图片 6' id=7 L=0.42 T=1.80 W=12.72 H=2.95
+     TEXT: 
+==========================================================================================
+SLIDE 13 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.3 论文宣称效果（3/5）：RQ3 计算效率 Table 5
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 与 ELCRec 相比的训练 / 推理开销
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.68 T=1.53 W=11.70 H=5.70
+     TEXT: 训练时间：较 ELCRec 增加约 80%（双专家前向传播开销） || 推理时间：仅增加约 50%（推理只用 raw 分支，不跑扩散 / 自适应） || 相比 DiffDiv / GlobalDiff 等扩散基线更高效（轻量架构） || 开销主要来自 双专家 + 对比学习 + 扩散增强 三部分叠加 || 推理省时关键：预测只用未经扩散的 raw 表征，自适应分支仅训练期生效
+  [PICTURE (13)] name='图片 5' id=6 L=2.23 T=3.57 W=8.19 H=3.66
+     TEXT: 
+==========================================================================================
+SLIDE 14 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.3 论文宣称效果（4/5）：RQ4 超参数设置与敏感性
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 论文 Implementation Details + Figure 4
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.80 T=1.60 W=11.70 H=5.70
+     TEXT: 论文超参数设置（Implementation Details） ||   Adam 优化器，weight decay = 1×10⁻⁴；最大序列长度 50 ||   Gumbel-Softmax 温度 τgs = 0.5；InfoNCE 温度 τ = 0.07 ||   最大扩散深度 Tmax 搜 {4, 6, 8, 10, 12} ||   λdeno、λcont 搜 {0.01, 0.03, 0.05, 0.1, 0.15} ||   λexpl 搜 {0.001, 0.003, 0.01, 0.03, 0.1} ||   硬件：20GB NVIDIA RTX 3090 || RQ4 敏感性结论（Figure 4） ||   最优 λexpl = 0.01、λdeno = 0.1 ||   辅助权重曲线在最优点附近平缓，对小幅偏差鲁棒
+  [PICTURE (13)] name='图片 5' id=6 L=5.65 T=1.50 W=6.75 H=3.97
+     TEXT: 
+==========================================================================================
+SLIDE 15 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 1.3 论文宣称效果（5/5）：RQ5 稀疏序列 Table 2
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 极稀疏场景（用户历史序列长度 ≤5）—— 稀疏下能否构建意图层次
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=0.50 T=6.95 W=12.30 H=5.70
+     TEXT: Beauty/Sports/Toys：提升 10%~19.7%；Yelp：仅 +2.5%~5.9%（意图层次本身不显著）
+  [PICTURE (13)] name='图片 6' id=7 L=3.59 T=1.59 W=5.70 H=4.95
+     TEXT: 
+==========================================================================================
+SLIDE 16 layout=Blank
+  [TEXT_BOX (17)] name='TextBox 1' id=2 L=1.00 T=2.70 W=11.30 H=2.00
+     TEXT: PART 2 || 代码复现
+==========================================================================================
+SLIDE 17 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.1 各文件作用
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: src/ 目录，共 8 个代码文件
+  [TABLE (19)] name='Table 4' id=5 L=0.50 T=1.55 W=12.30 H=5.20
+     TEXT: 
+==========================================================================================
+SLIDE 18 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.2 各模块实现（1/4）：ADC
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: models.py L162 / modules.py L276~312
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.45 W=12.30 H=3.44
+     TEXT: 调用入口 ||   probs = self.controller(sequence_emb.detach(), sequence_lengths)  —— (B, 2) ||   detach 阻断梯度：controller 只能看 embedding，不能反传 || 内部三步流程 ||   ① GRU 编码序列 → last_hidden.squeeze(0) → (B, D) ||   ② 长度 embedding：clamp(lengths, max=512) → length_emb (B, D) ||   ③ 拼接 (B,2D) → Linear → logits (B,2) → F.softmax → probs (B,2) || probs 三去向：① 前向加权求和 ② 反向探索损失 -entropy(probs) ③ InstanceCL 分支丢弃 || 差异：普通 softmax，无 Gumbel 噪声、无 argmax（软混合）
+  [PICTURE (13)] name='图片 5' id=6 L=8.09 T=1.10 W=4.62 H=2.56
+     TEXT: 
+  [PICTURE (13)] name='图片 6' id=7 L=8.09 T=4.82 W=4.62 H=2.46
+     TEXT: 
+  [PICTURE (13)] name='图片 7' id=8 L=8.09 T=3.83 W=4.62 H=0.85
+     TEXT: 
+==========================================================================================
+SLIDE 19 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.2 各模块实现（2/4）：HDA
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: diffusion_utils.py forward_diffusion / models.py L181~194
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.55 W=12.30 H=5.70
+     TEXT: 前向加噪（forward_diffusion，仅两纯函数） ||   sqrt_alpha = sqrt(alphas_cumprod[t]).view(-1,1,1) ||   E_t = sqrt_alpha · E_0 + sqrt(1-alpha) · noise（noise 独立采样） ||   t 为 per-sample（torch.full((B,), depth-1)），同批共享 depth || adaptive 分支生成路径 ||   input_ids → 位置编码 → sequence_emb → controller(detach) → probs ||   对每个 depth：forward_diffusion → diffused_emb × weight → 求和 ||   → item_encoder(Transformer) → 取末层 → adaptive_sequence_output || 差异：无独立去噪网络，加噪后直接再编码（非「先去噪再编码」） || 两路关系：raw 与 adaptive 并行共享 sequence_emb（加噪前 detach）
+  [PICTURE (13)] name='图片 5' id=6 L=6.41 T=3.94 W=6.78 H=3.06
+     TEXT: 
+  [PICTURE (13)] name='图片 6' id=7 L=6.41 T=1.30 W=6.78 H=2.39
+     TEXT: 
+==========================================================================================
+SLIDE 20 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.2 各模块实现（3/4）：HP-MoE
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: main.py L178~184 / trainers.py iteration
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.55 W=12.30 H=5.70
+     TEXT: 双专家构造（--dual_expert 启用） ||   levels_e1 = [4, 5]（浅层）→ model_e5 ||   levels_e2 = [9, 10]（深层）→ model_e10 ||   每个专家是完整 SASRecModel（独立 embedding/Encoder/controller） || 训练 ||   每 batch 分别训练 model_e5 与 model_e10，独立优化器、独立反向 || 推理融合 ||   rating_pred = (rating_pred_e5 + rating_pred_e10) / 2.0 || 差异：无门控网络，等权平均（更接近双模型集成） || 风险：双专家无参数共享 → 显存翻倍 + 无跨专家知识迁移
+  [PICTURE (13)] name='图片 5' id=6 L=6.19 T=1.51 W=6.94 H=2.77
+     TEXT: 
+==========================================================================================
+SLIDE 21 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.2 各模块实现（4/4）：损失函数
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: trainers.py _train_one_expert
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.55 W=12.30 H=5.70
+     TEXT: 单专家损失组合 ||   joint_loss = rec·1.0 + deno·1e-4 + expl·1e-4 + cl || 各损失实现 ||   L_rec：BPR/交叉熵，raw 分支与 adaptive 分支各自计算 ||   L_deno = MSE(adaptive_output, raw.detach())  —— 表示重构，非噪声预测 ||   L_expl = -mean(entropy(probs))  —— 负熵探索 ||   L_cl：InstanceCL(NCE) + IntentCL(PCL) + 簇中心距离损失 || 双专家：各自独立反向传播，共享数据但参数不共享 || 差异：L_deno 代码为表示重构损失，非论文的噪声预测 MSE
+==========================================================================================
+SLIDE 22 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.3 参数设置
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 符号约定 → CLI 默认值 → 数据集差异
+  [TABLE (19)] name='Table 4' id=5 L=0.80 T=1.50 W=11.70 H=4.90
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=0.50 T=6.55 W=12.30 H=0.70
+     TEXT: 其他：patience=40, delta=0；Adam betas=(0.9,0.98), eps=1e-8；λ_deno=λ_expl=1e-4；beta 1e-4→0.02
+==========================================================================================
+SLIDE 23 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 2.3 参数设置
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 论文设定 vs 训练命令实际值
+  [TABLE (19)] name='Table 4' id=5 L=0.65 T=1.40 W=11.50 H=4.52
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=0.50 T=6.10 W=12.30 H=5.70
+     TEXT: 本地硬件：NVIDIA RTX 5060 Laptop（8GB）/ 32GB 内存 / Core Ultra 9 275HX；论文为 20GB RTX 3090 || 训练时显式传参对齐论文值；唯一无法对齐：Gumbel-Softmax（代码用普通 softmax） || 注意：双专家实际加噪深度仍硬编码 [4,5]/[9,10]，diffusion_t_max 只控噪声调度步数
+==========================================================================================
+SLIDE 24 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.3 数据处理
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: datasets.py RecWithContrastiveLearningDataset
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.55 W=12.30 H=5.70
+     TEXT: 数据划分（item_list 切分） ||   valid_rating_matrix：item_list[:-2]（仅训练物品） ||   test_rating_matrix：item_list[:-1]（训练+验证物品） || 序列切分与标签 ||   交互序列 → input_ids（历史）+ target_pos（正样本）+ target_neg（负样本） ||   生成两份增强副本用于对比学习 ||   Padding：左填充到 max_seq_length，mask 标记有效位置 || 负采样 ||   候选集 = 100 随机负样本 + 1 正样本；负物品不从训练历史采样 || 评测协议关键：--do_eval 必须切 test_rating_matrix，否则验证物品泄漏（Bug #6）
+==========================================================================================
+SLIDE 25 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.3 模型设定
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: models.py SASRecModel + KMeans
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.55 W=12.30 H=5.70
+     TEXT: SASRec 主干（继承 ELCRec） ||   Embedding（物品+位置）→ 多层 Transformer Encoder → 序列表示 ||   Pre-LN、Dropout、残差连接、因果 Mask（只关注当前及之前） || 自适应扩散分支（enable_adaptive_diffusion） ||   raw 分支：干净嵌入 → Encoder → raw_output ||   adaptive 分支：加噪嵌入 → Encoder → adaptive_output ||   两路并行，共享 sequence_emb（controller 输入处 detach） || 双专家模式（--dual_expert） ||   model_e5（depth=[4,5]）+ model_e10（depth=[9,10]），各自完整模型 ||   推理融合：fused = (pred_e5 + pred_e10) / 2 || KMeans 聚类器：维护可学习簇中心（意图原型），EMA 更新
+==========================================================================================
+SLIDE 26 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.3 模型训练
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: trainers.py DualExpertTrainer / ELCRecTrainer
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.55 W=12.30 H=5.70
+     TEXT: 单专家训练循环（_train_one_expert） ||   forward → raw_loss + adaptive_loss → joint_loss → backward → step ||   joint_loss = rec·1.0 + deno·1e-4 + expl·1e-4 + cl || 双专家调度（DualExpertTrainer） ||   每 batch 分别训练 model_e5 与 model_e10（独立优化器、独立反向） || 验证与早停 ||   每 epoch 评测 e5/e10/fused 三组指标（各 HIT@5/20, NDCG@5/20） ||   双独立 EarlyStopper，监控各专家 raw NDCG@20，patience=40, delta=0 ||   两专家都触发早停才结束训练 || 断点续训（--resume）：快照含模型/优化器/早停器状态，weights_only=False
+==========================================================================================
+SLIDE 27 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.4 训练执行流程图
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: main.py 入口 → 训练循环 → 早停 → 测试
+  [AUTO_SHAPE (1)] name='Rectangle 4' id=5 L=1.05 T=1.88 W=2.60 H=0.70
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=1.05 T=1.93 W=2.60 H=0.60
+     TEXT: main.py 入口解析命令行参数
+  [AUTO_SHAPE (1)] name='Down Arrow 6' id=7 L=2.15 T=2.58 W=0.40 H=0.50
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 7' id=8 L=1.05 T=3.08 W=2.60 H=0.70
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 8' id=9 L=1.05 T=3.12 W=2.60 H=0.60
+     TEXT: 加载数据datasets.py
+  [AUTO_SHAPE (1)] name='Down Arrow 9' id=10 L=2.15 T=3.77 W=0.40 H=0.50
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 10' id=11 L=1.05 T=4.28 W=2.60 H=0.70
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 11' id=12 L=1.05 T=4.32 W=2.60 H=0.60
+     TEXT: 构建模型models.py
+  [AUTO_SHAPE (1)] name='Down Arrow 12' id=13 L=2.15 T=4.97 W=0.40 H=0.50
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 13' id=14 L=1.05 T=5.47 W=2.60 H=0.70
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 14' id=15 L=1.05 T=5.52 W=2.60 H=0.60
+     TEXT: 构建 Trainertrainers.py
+  [AUTO_SHAPE (1)] name='Down Arrow 15' id=16 L=2.15 T=6.17 W=0.40 H=0.50
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 16' id=17 L=1.05 T=6.67 W=2.60 H=0.70
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 17' id=18 L=1.05 T=6.78 W=2.60 H=0.60
+     TEXT: 最终测试评测输出指标
+  [AUTO_SHAPE (1)] name='Rectangle 18' id=19 L=4.83 T=2.79 W=3.00 H=0.80
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 19' id=20 L=4.83 T=2.84 W=3.00 H=0.70
+     TEXT: 训练循环for epoch 1..epochs
+  [AUTO_SHAPE (1)] name='Down Arrow 20' id=21 L=6.13 T=3.59 W=0.40 H=0.50
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 21' id=22 L=4.83 T=4.09 W=3.00 H=0.80
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 22' id=23 L=4.83 T=4.14 W=3.00 H=0.70
+     TEXT: train_epochforward→loss→backward→step(双专家各自独立)
+  [AUTO_SHAPE (1)] name='Down Arrow 23' id=24 L=6.13 T=4.89 W=0.40 H=0.50
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 24' id=25 L=4.83 T=5.39 W=3.00 H=0.75
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 25' id=26 L=4.83 T=5.44 W=3.00 H=0.65
+     TEXT: valid_epoch评测 e5/e10/fused 指标
+  [AUTO_SHAPE (1)] name='Rectangle 26' id=27 L=8.76 T=2.83 W=3.60 H=0.80
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 27' id=28 L=8.76 T=2.87 W=3.60 H=0.70
+     TEXT: 早停判断双专家 NDCG@20 是否都停?patience=40, delta=0
+  [AUTO_SHAPE (1)] name='Rectangle 28' id=29 L=8.76 T=4.33 W=3.60 H=0.80
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 29' id=30 L=8.76 T=4.38 W=3.60 H=0.70
+     TEXT: 否 → 回到训练循环(继续下个 epoch)
+  [AUTO_SHAPE (1)] name='Rectangle 30' id=31 L=8.76 T=5.33 W=3.60 H=0.80
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 31' id=32 L=8.76 T=5.38 W=3.60 H=0.70
+     TEXT: 是 → 加载最优权重→ 最终测试
+  [TEXT_BOX (17)] name='TextBox 32' id=33 L=0.50 T=1.40 W=12.30 H=0.10
+     TEXT: 训练期验证用 valid_rating_matrix（监控 raw NDCG@20）；最终测试用 test_rating_matrix（监控 fused HIT@5/NDCG@5）
+  [AUTO_SHAPE (1)] name='Down Arrow 20' id=35 L=10.44 T=3.62 W=0.40 H=0.50
+     TEXT: 
+==========================================================================================
+SLIDE 28 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 2.5 复现结果（1/4）：RQ1 主结果 完整模型 vs 论文
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: Beauty / Sports 最终测试集（fused）
+  [TABLE (19)] name='Table 4' id=5 L=0.90 T=1.60 W=11.50 H=3.84
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=0.50 T=5.00 W=12.30 H=1.54
+     TEXT: Beauty：四指标均仅差 ~0.001-0.002，与论文几乎完全一致 → 复现成功 || Sports：四指标差 ~0.0001-0.0004，同样几乎完全一致 || 关键：评测协议修复后（Bug #6，切 test_rating_matrix）复现才与论文对齐；此前 do_eval 0.0266 系验证泄漏低估 || 论文 vs 代码存在多处语义差异（softmax/去噪/门控简化），但复现结果仍一致
+==========================================================================================
+SLIDE 29 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 2.5 复现结果（2/4）：RQ2 去 ADC 消融
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 本地复现 vs 论文宣称
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.50 W=12.30 H=0.40
+     TEXT: 去 ADC 消融（模型4：--ablate_adc，固定深度 [5]/[10]，最终测试 fused）
+  [TABLE (19)] name='Table 5' id=6 L=0.86 T=1.90 W=11.00 H=4.29
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 6' id=7 L=0.86 T=6.20 W=10.34 H=1.19
+     TEXT: 本地去 ADC 消融未复现论文的 3.9%/4.1% 下降——反而微升 ~0.001 ||   根因①：本地 ADC 为「相邻双深度软混合」(num_levels=2、[4,5]/[9,10])，自适应空间极小，远弱于论文 0~k 连续 Gumbel-Softmax ||   根因②：代码把 ADC/HDA/C-A Router 三组件挂到同一个 probs 上（ADC 是枢纽），拆任意一个都连带废掉其余 ||   根因③：probs 唯一消费方 = HDA 加噪，去 HDA 也会让 probs=None → 探索损失归零 → ADC 不再被训练
+==========================================================================================
+SLIDE 30 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 2.5 复现结果（3/4）：RQ3 超参数敏感性
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=2.92 H=0.33
+     TEXT: Toys数据集  默认设置 vs 论文设置
+  [TABLE (19)] name='Table 5' id=6 L=0.48 T=1.47 W=12.26 H=3.26
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 6' id=7 L=0.48 T=5.16 W=12.30 H=1.94
+     TEXT: 关键发现 ||  默认参数性能最优：deno_weight=0.0001、expl_weight=0.0001、temperature=1.0 在 Toys 上取得最佳结果 ||  论文参数套用导致性能崩溃：deno_weight=0.1、expl_weight=0.01、weight_decay=0.0001、temperature=0.07 使 N@5 从 0.0474 跌至 0.0049（↓89.7%） ||  温度和权重衰减参数敏感性：τ 从 1.0 降至 0.5，N@5 下降 61.6%（0.0474 → 0.0182）；降至 0.07 继续恶化；wd从0.0上升至0.0001，指标就下降了三分之一 ||  deno_weight和expl_weight具有一定鲁棒性 ||  辅助损失权重是关键瓶颈：代码中 L_deno 为表示重构（非噪声预测），过高权重直接干扰主任务
+==========================================================================================
+SLIDE 31 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 2.5 复现结果（4/4）：RQ5 稀疏序列
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 本地复现 vs 论文 Table 2（模型2：max_seq_length=5）
+  [TABLE (19)] name='Table 4' id=5 L=0.90 T=1.80 W=11.00 H=2.60
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=0.50 T=4.70 W=12.30 H=1.16
+     TEXT: Sports：四指标差 0.0001~0.002，与论文基本一致 || Yelp：四指标差 0.0001-0.00007，与论文基本一致 || 说明：稀疏序列实验（意图层次重建）本地复现成功；RQ3 效率未做专门复现实验
+==========================================================================================
+SLIDE 32 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 2.5 本地全量训练结果汇总
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 最终测试集 fused（HIT@5 / NDCG@5 / HIT@20 / NDCG@20）
+  [TABLE (19)] name='Table 4' id=5 L=0.35 T=1.40 W=12.67 H=5.89
+     TEXT: 
+==========================================================================================
+SLIDE 33 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 2.5 关键发现：ADC/HDA/C-A Router 三组件耦合示意
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 代码把三个论文组件压进同一个 probs，ADC 是枢纽
+  [AUTO_SHAPE (1)] name='Rectangle 4' id=5 L=0.40 T=1.80 W=2.50 H=0.75
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=0.40 T=1.85 W=2.50 H=0.65
+     TEXT: sequence_emb（序列嵌入）
+  [AUTO_SHAPE (1)] name='Right Arrow 6' id=7 L=2.95 T=2.02 W=0.45 H=0.30
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 7' id=8 L=3.40 T=1.80 W=2.70 H=0.75
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 8' id=9 L=3.40 T=1.85 W=2.70 H=0.65
+     TEXT: controller（GRU+Linear）
+  [AUTO_SHAPE (1)] name='Right Arrow 9' id=10 L=6.15 T=2.02 W=0.45 H=0.30
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 10' id=11 L=6.60 T=1.80 W=2.60 H=0.75
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 11' id=12 L=6.60 T=1.85 W=2.60 H=0.65
+     TEXT: probs (B,2)softmax 概率
+  [AUTO_SHAPE (1)] name='Right Arrow 12' id=13 L=9.25 T=2.02 W=0.45 H=0.30
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 13' id=14 L=9.70 T=1.80 W=3.20 H=0.75
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 14' id=15 L=9.70 T=1.85 W=3.20 H=0.65
+     TEXT: HDA 加噪加权Σ depth[4,5]·prob
+  [AUTO_SHAPE (1)] name='Down Arrow 15' id=16 L=7.70 T=2.55 W=0.40 H=0.50
+     TEXT: 
+  [AUTO_SHAPE (1)] name='Rectangle 16' id=17 L=6.60 T=3.10 W=6.30 H=1.00
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 17' id=18 L=6.60 T=3.14 W=6.30 H=0.92
+     TEXT: probs 的双重身份①前向=C-A Router 层级加权②反向负熵=ADC 选深度探索
+  [AUTO_SHAPE (1)] name='Rectangle 18' id=19 L=0.40 T=4.50 W=12.50 H=1.15
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 19' id=20 L=0.40 T=4.54 W=12.50 H=1.07
+     TEXT: 三重压缩：num_levels=2（相邻两深度）· expl_weight=1e-4（探索趋零）· 融合固定 0.5/0.5（无门控）
+  [AUTO_SHAPE (1)] name='Rectangle 20' id=21 L=0.40 T=5.85 W=12.50 H=1.15
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 21' id=22 L=0.40 T=5.89 W=12.50 H=1.07
+     TEXT: 结论：三组件都挂在同一个 probs 上、互相咬死，拆任何一个都连带废掉其余 → 实为「几乎不影响前向」的装饰；真正决定指标的是 SASRec 骨干 + 双专家集成（两套独立参数）
+==========================================================================================
+SLIDE 34 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 2.5 结果归因分析：三大发现
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 论文参数为何「水土不服」？
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.50 T=1.55 W=12.30 H=1.68
+     TEXT: ① 默认参数完美复现（Beauty 0.0392 / Sports 0.0224 / Toys 0.0474 vs 论文 0.0403/0.0228/0.0474） ||    主干（SASRec + 双专家集成）正确，评测协议修复后无泄漏 || ② 论文参数套代码 → 崩溃（Beauty 模型6 0.0392→0.0151；Toys 模型1/2 0.0474→0.0052） ||    deno_weight和expl_weight具有一定鲁棒性，崩溃主因是temperature和weight_decay || ③  ADC/HDA 消融做不出论文下降：去 ADC 反而微升（印证三组件耦合、自适应空间被压缩）
+==========================================================================================
+SLIDE 35 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.5 补充：ADARec(2) 对齐版三组实验
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.10 W=12.30 H=0.42
+     TEXT: 对齐 4 处语义差异后，在 Sports 上检验论文超参可复现性与消融
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.60 T=1.55 W=12.37 H=0.67
+     TEXT: ADARec(2) 相对原版补全 5 处语义：ADC 用 Gumbel-Softmax、HDA 补去噪网络、HP-MoE 补门控路由、L_deno 改噪声预测 MSE、专家ADC范围采样 || 三组 run（beauty数据集）：
+  [TABLE (19)] name='Table 5' id=8 L=0.64 T=2.42 W=12.06 H=2.81
+     TEXT: 
+==========================================================================================
+SLIDE 36 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.5 补充：ADARec(2) 三大发现
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.10 W=12.30 H=0.42
+     TEXT: 语义对齐后的关键结论（推翻了部分旧归因）
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.60 T=1.55 W=12.10 H=5.72
+     TEXT: ① 语义对齐 + 默认参数即可复现 || ADARec-2-Sports-3（默认参数）取得 H@5=0.0331, N@5=0.0222, H@20=0.0744, N@20=0.0338，与论文（0.0341 / 0.0228 / 0.0745 / 0.0341）及原版默认（0.0338 / 0.0224 / 0.0749 / 0.0339）趋同。补全的 Gumbel-Softmax / 去噪网络 / 门控路由在默认超参下未带来可观测增益——原版简化实现与论文对齐实现在最终指标上趋同。 || ② 论文超参套对齐版代码仍然崩溃，但崩溃主因是 weight_decay 与 τ，而非 deno/expl 权重 || ADARec-2-Sports-1（τ=0.07, wd=1e-4, deno=0.1, expl=0.01）N@5=0.0046，相对默认 N@5=0.0222 下降约 79%。旧归因「崩溃因 L_deno 是表示重构而非噪声预测」已被推翻——对齐版已将 L_deno 改为噪声预测 MSE，崩溃依旧。 || 进一步对照： || ADARec-Toys-5：deno=0.1, expl=0.01，但 τ=1.0, wd=0 → 成功，N@5=0.0463。说明 较大的 deno/expl 权重本身不会导致崩溃。 || ADARec-Toys-6：deno=1e-4, expl=1e-4，但 wd=1e-4, τ=1.0 → 崩溃，N@5=0.0280。说明 weight_decay=1e-4 单独即可导致崩溃。 || ADARec-2-Sports-2：τ=1.0, wd=1e-4, deno=0.1, expl=0.01 → 部分崩溃，N@5=0.0116。进一步确认 wd=1e-4 是崩溃主因。 || ADARec-2-Sports-1 vs Sports-2：τ=0.07 比 τ=1.0 崩溃更严重，说明 τ 过小（InfoNCE 温度过尖锐）会加剧崩溃。 || 真正根因：weight_decay=1e-4 与 τ 过小（InfoNCE 温度过尖锐）是崩溃主因；deno_weight、expl_weight 在合理温度与权重衰减下可正常训练。 || ③ HDA 消融做不出论文下降、方向相反 || Sports 对齐版未做去 HDA 实验；Beauty 对齐版去 HDA（ADARec-2-Beauty-2）N@20=0.0567，相对完整（0.0571）仅降 0.70%，远小于论文 -7.0%。即便语义对齐，扩散增强（HDA + 去噪网络）在这套训练协议下对最终排序指标贡献 ≈0；论文消融表的下降幅度无法通过官方公开代码独立复现。 || 结论：可复现的增益主要来自「SASRec 骨干 + 双专家集成」，而非扩散 / ADC / 门控三件套。
+==========================================================================================
+SLIDE 37 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.5 关键 Bug 与修复列表
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 共 6 项：4 项已修复 / 1 项语义偏差不改 / 1 项记录
+  [TABLE (19)] name='Table 4' id=5 L=0.40 T=1.60 W=12.50 H=4.80
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 5' id=6 L=0.50 T=6.55 W=12.30 H=5.70
+     TEXT: OOM 根因：train_matrix.toarray() 每批 (256,18359) int32 ≈17.9MiB，训练 4.5h 后耗尽 host RAM（非显存）
+==========================================================================================
+SLIDE 38 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.6 实验日志总结
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=3.23 H=0.33
+     TEXT: 15 次训练概览（output/ 下 txt 日志）
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.60 T=1.50 W=12.10 H=5.28
+     TEXT: 日志组织 || - 每数据集独立 `output/{数据集}/` 目录。 || - 日志文件：`ADARec-{数据集}-{模型序号}.log`（stdout）、`.err`（stderr）、`.txt`（进度/指标追加）。首行记录训练命令。 || - 每个 epoch 记录：e5/e10/fused 三组 `HIT@5`、`NDCG@5`、`HIT@20`、`NDCG@20`；早停触发；最终测试结果。 || 训练分布（官方原版代码 ADARec） || - Beauty：9 次（默认、伪消融 `probs=0.5`、初版去ADC、初版去HDA、论文参数、严格去ADC、严格去HDA、严格去MoE、三消融全开） || - Sports：3 次（默认、`--max_seq_length 5`、`--shorten_seq_to 5`） || - Toys：6 次（论文参数 τ=0.07/Tmax=12、论文参数 τ=0.07、论文参数 τ=0.5、默认、折中 τ=1.0/wd=0/layers=3、折中 τ=1.0/wd=1e-4/layers=3） || - Yelp：2 次（`--max_seq_length 5`、`--shorten_seq_to 5`）   ||   合计：20 次 || 训练分布（ADARec-2 对齐版） || - Sports：3 次（论文超参倾向、放宽 τ/Tmax、默认参数） || - Beauty：3 次（严格去ADC、严格去HDA、完整对齐版）   ||   合计：6 次 || 早停监控 || - 各专家 raw NDCG@20，双独立 EarlyStopper，`patience=40`，两专家均触发才结束。
+==========================================================================================
+SLIDE 39 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.6 实验结果图表（1）：主结果复现
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 完整模型（默认参数） vs 论文 Table 1
+  [PICTURE (13)] name='Picture 4' id=5 L=0.99 T=2.04 W=11.50 H=3.01
+     TEXT: 
+==========================================================================================
+SLIDE 40 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.6 实验结果图表（2）：稀疏序列复现
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 序列长度≤5（--shorten_seq_to 5） vs 论文 Table 2
+  [PICTURE (13)] name='Picture 4' id=5 L=2.30 T=1.70 W=9.00 H=3.41
+     TEXT: 
+==========================================================================================
+SLIDE 41 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.6 实验结果图表（3）：消融与超参对照
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: Beauty 消融 + 论文 vs 代码默认超参
+  [PICTURE (13)] name='图片 6' id=7 L=2.89 T=1.50 W=6.33 H=2.64
+     TEXT: 
+  [PICTURE (13)] name='图片 7' id=8 L=2.89 T=4.32 W=6.34 H=2.88
+     TEXT: 
+==========================================================================================
+SLIDE 42 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.80
+     TEXT: 2.6 实验结果图表（4）：14 次训练汇总
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.08 W=12.30 H=0.42
+     TEXT: 最终 fused NDCG@5（红色竖线 = 各实验对应论文基线）
+  [PICTURE (13)] name='图片 4' id=5 L=0.84 T=1.44 W=10.40 H=5.86
+     TEXT: 
+==========================================================================================
+SLIDE 43 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 总结
+  [TEXT_BOX (17)] name='TextBox 3' id=4 L=0.50 T=1.55 W=12.30 H=2.85
+     TEXT: 论文贡献 ||   提出用扩散去噪轨迹重建意图层次的新思路，缓解稀疏数据下的意图建模 || 代码现状 ||   与论文描述存在多处语义差异（softmax / 去噪 / 门控简化） ||   已修复 4 个关键 Bug（OOM、NameError、权重后缀、验证泄漏） ||   完整模型、稀疏序列、超参数敏感性复现均与论文基本一致 ||   消融实验未成功，计算效率实验未复现
+==========================================================================================
+SLIDE 44 layout=Blank
+  [TEXT_BOX (17)] name='TextBox 1' id=2 L=1.00 T=2.70 W=11.30 H=2.00
+     TEXT: PART 3 || 学习总结
+==========================================================================================
+SLIDE 45 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 3.1 假期学习总结
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.60 T=1.31 W=12.00 H=5.83
+     TEXT: 1、论文复现情况 || 精读 ADARec（AAAI 2026）并完整复现代码：修复 4 个关键 Bug、完成 20 次训练；完整与稀疏序列复现均与论文基本一致（偏差 ≤0.001）；消融实验与超参数敏感性实验复现失败；训练效率实验未进行复现。 || 发现论文与代码存在 4 处语义差异（softmax/去噪/门控/重构损失），但主干正确、复现成功。 || 2、推荐系统知识 || 系统学习并梳理推荐系统知识体系并记录进recsys.md：发展脉络、经典/现代方法、实验范式与评价指标。 || 每篇附论文地址、56 词条速查表，并以 ADARec 为案例贯穿扩散 / 自适应深度 / 双专家。 || 3、Python 语法 || 从 ADARec 代码提炼 PyTorch/NumPy/稀疏矩阵等语法点（全部标注实际行号），并补全序列/图/扩散/LoRA/多任务等推荐通用语法，写入 python.md。 || 4、文献阅读 || 精读 1 篇（ADARec）+ 泛读 13篇扩散序列推荐论文+8篇生成式推荐与大推荐模型论文，每篇固定四段式（问题/目的/内容/结果）+ 出处/DOI/代码，写入 paper_reading/overview.md。 || 5、前沿研究了解 || 了解具身智能、Agent、世界模型、LLM×Rec 等 AI 前沿（explanation.md 分字母速查）。 || 新增工业界生成式推荐与大推荐模型 Scaling Law：HSTU、OneRec、RankMixer、OneTrans、R²ec、RecZero 等 8 篇（CCF-A 为主，官方 DOI 收录）。
+==========================================================================================
+SLIDE 46 layout=Blank
+  [AUTO_SHAPE (1)] name='Rectangle 1' id=2 L=0.00 T=0.00 W=13.33 H=1.05
+     TEXT: 
+  [TEXT_BOX (17)] name='TextBox 2' id=3 L=0.50 T=0.13 W=12.30 H=0.54
+     TEXT: 3.2 后续学习安排
+  [TEXT_BOX (17)] name='TextBox 4' id=5 L=0.60 T=1.25 W=12.00 H=3.72
+     TEXT: 1、加强英文阅读能力 || 阅读英文论文仍需大量借助翻译工具，需要加强英文阅读能力。 || 2、加强对专业用语的学习 || 在科研学习中不可避免地会不断出现陌生的专业用语，因此需要在学习中不断积累知识，达到量变产生质变。 || 3、持续进行文献阅读 || 大量阅读专业论文是提高学术素养的核心方式，需要坚持。 || 4、提高论文复现频率 || 论文内容与实际代码往往具有偏差，多做实验才能知晓真实情况。 || 5、寻找研究方向，争取发表论文 || 从论文阅读和代码复现中，找寻可以进行研究和优化的方向，并尝试发表学术论文。
